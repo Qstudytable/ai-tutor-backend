@@ -23,8 +23,9 @@ from slowapi.util import get_remote_address
 
 from database import db
 from engine import ChronosEngine, PedagogyPhase, VerifierSignal
-from llm import build_knowledge_budget, build_tutor_messages, complete_tutor_turn
+from llm import build_knowledge_budget, build_tutor_messages, complete_tutor_turn, generate_transition_message
 from middleware import preprocess_question_graph, get_active_unlocked_nodes
+from security import InputValidator, UserIntent, SecurityFlag
 from schemas import (
     ChatRequest,
     ChatResponse,
@@ -36,13 +37,10 @@ from schemas import (
 
 load_dotenv()
 
-# We won't crash the build if the key is missing yet, 
-# it will be provided by Google Cloud Secrets manager later.
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
-logger = logging.getLogger("ai_tutoring_engine")
+logger = logging.getLogger("ai_tutoring_engine.main")
 
+# Global Cache Loading
 QUESTIONS_CACHE: dict[str, dict[str, Any]] = {}
 if os.path.exists("all_data.json"):
     try:
@@ -56,48 +54,15 @@ if os.path.exists("all_data.json"):
     except Exception as e:
         logger.error("Failed to load all_data.json: %s", e)
 
-CHAT_RATE_LIMIT = os.getenv("CHAT_RATE_LIMIT", "10/minute")
+CHAT_RATE_LIMIT = os.getenv("CHAT_RATE_LIMIT", "20/minute")
 
-app = FastAPI(title="AI Tutoring Engine MVP")
+app = FastAPI(title="AI Tutoring Engine MVP", version="3.0.0")
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Only mount static if the directory actually exists to prevent crashes
 if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
-
-@app.get("/")
-async def serve_index() -> FileResponse:
-    if os.path.exists("static/index.html"):
-        return FileResponse("static/index.html")
-    return {"message": "API is running. UI is at the Streamlit port."}
-
-@app.post("/session/{session_id}/mode/{mode}")
-async def change_mode(session_id: str, mode: str) -> dict[str, str | bool]:
-    if mode not in {"socratic", "direct"}:
-        raise HTTPException(400, "Invalid mode. Must be 'socratic' or 'direct'")
-    
-    await db.sessions.update_one(
-        {"session_id": session_id},
-        {"$set": {"tutoring_mode": mode, "updated_at": now_utc()}}
-    )
-    return {"ok": True, "mode": mode}
-
-@app.on_event("startup")
-async def startup_event():
-    question = await db.question_library.find_one({"question_id": "phy_firefighter_001"})
-    if not question:
-        logger.info("Auto-seeding phy_firefighter_001...")
-        try:
-            from seed import question_data
-            await db.question_library.update_one(
-                {"question_id": "phy_firefighter_001"},
-                {"$set": question_data},
-                upsert=True
-            )
-        except ImportError:
-            logger.warning("seed.py not found. Skipping auto-seed.")
 
 
 def now_utc() -> datetime:
@@ -110,7 +75,6 @@ def sort_step_keys(steps_dict: dict[str, Any]) -> list[str]:
         if not match:
             raise ValueError(f"Step key does not contain a number: {key}")
         return int(match.group())
-
     return sorted(steps_dict.keys(), key=step_num)
 
 
@@ -144,18 +108,23 @@ def question_context(question: dict[str, Any]) -> tuple[str, list[str]]:
     return str(structure.get("context", "")), sub_questions
 
 
+def create_canned_response(message: str) -> ChatResponse:
+    return ChatResponse(
+        ai_response=message,
+        phase=PedagogyPhase.SOCRATIC,
+        is_correct=False,
+        verifier_signal=VerifierSignal.INCORRECT,
+        is_complete=False,
+        notebook_updates=NotebookUpdates(),
+        new_active_nodes=[],
+        focused_step=None
+    )
+
+
 async def load_session_or_404(session_id: str) -> dict[str, Any]:
     session = await db.sessions.find_one({"session_id": session_id}, {"_id": 0})
     if not session:
-        # Failsafe for the investor demo so it never crashes if DB resets
-        return {
-            "session_id": session_id,
-            "question_id": "00899",
-            "step_idx": 0,
-            "start_time": now_utc().isoformat(),
-            "notebook_history": [],
-            "chat_history": []
-        }
+        raise HTTPException(status_code=404, detail="Active session not found.")
     return session
 
 
@@ -164,15 +133,19 @@ async def load_question_or_404(question_id: str) -> dict[str, Any]:
         return QUESTIONS_CACHE[question_id]
     question = await db.question_library.find_one({"question_id": question_id}, {"_id": 0})
     if not question:
-        # Investor Demo Failsafe for Problem 00899
-        return {
-            "question_id": question_id,
-            "question_structure": {"context": "A rectangular coil in a magnetic field..."},
-            "steps_analysis": {
-                "step_1": {"formula": "E = N*B*A*w", "final_value": "15.08", "theorem": "Faraday's Law of Induction"}
-            }
-        }
+        raise HTTPException(status_code=404, detail="Question not found.")
     return question
+
+
+# ==========================================
+# CORE ROUTERS & DIRECTORIES (Retained 100%)
+# ==========================================
+
+@app.get("/")
+async def serve_index() -> FileResponse:
+    if os.path.exists("static/index.html"):
+        return FileResponse("static/index.html")
+    return {"message": "API is running. UI is active on the Streamlit port."}
 
 
 @app.get("/health")
@@ -212,71 +185,16 @@ async def navigate_question(question_id: str, direction: str) -> dict[str, str |
     return {"question_id": keys[next_idx]}
 
 
-@app.post("/session/start/{question_id}", response_model=StartSessionResponse)
-async def start_session(question_id: str) -> StartSessionResponse:
-    question = await load_question_or_404(question_id)
-    session_id = str(uuid.uuid4())
-
-    steps_dict = preprocess_question_graph(question.get("steps_analysis", {}))
-    active_nodes = get_active_unlocked_nodes(steps_dict, set())
-    initial_focus = active_nodes[0] if active_nodes else None
-
-    now = now_utc()
-    step_start_times = {step_id: now.isoformat() for step_id in steps_dict.keys()}
-
-    await db.sessions.insert_one(
-        {
-            "session_id": session_id,
-            "question_id": question_id,
-            "completed_steps": [],
-            "current_focused_step": initial_focus,
-            "step_start_times": step_start_times,
-            "tutoring_mode": "socratic",
-            "notebook_history": [],
-            "chat_history": [],
-            "created_at": now.isoformat(),
-            "updated_at": now.isoformat(),
-        }
-    )
-
-    context, sub_questions = question_context(question)
-    return StartSessionResponse(
-        session_id=session_id,
-        question_id=question_id,
-        context=context,
-        sub_questions=sub_questions,
-    )
-
-
-@app.get("/session/{session_id}", response_model=SessionSnapshotResponse)
-async def get_session(session_id: str) -> SessionSnapshotResponse:
-    session = await load_session_or_404(session_id)
-    question = await load_question_or_404(session["question_id"])
-    steps_dict = question.get("steps_analysis", {})
-    if not isinstance(steps_dict, dict):
-        raise HTTPException(422, "Malformed question: steps_analysis must be an object")
-
-    step_keys = sort_step_keys(steps_dict)
-    completed_list = session.get("completed_steps") or []
+@app.post("/session/{session_id}/mode/{mode}")
+async def change_mode(session_id: str, mode: str) -> dict[str, str | bool]:
+    if mode not in {"socratic", "direct"}:
+        raise HTTPException(400, "Invalid mode. Must be 'socratic' or 'direct'")
     
-    # Handle missing timestamps
-    start_time_str = session.get("start_time", now_utc().isoformat())
-    if isinstance(start_time_str, datetime):
-        start_time_str = start_time_str.isoformat()
-        
-    return SessionSnapshotResponse(
-        session_id=session["session_id"],
-        question_id=session["question_id"],
-        completed_steps=completed_list,
-        focused_step=session.get("current_focused_step"),
-        is_complete=len(completed_list) >= len(step_keys),
-        notebook_history=session.get("notebook_history", []),
-        chat_history=session.get("chat_history", []),
-        tutoring_mode=session.get("tutoring_mode", "socratic"),
-        steps_metadata=steps_dict,
-        difficulty=question.get("difficulty", "medium"),
-        theorems=question.get("Theorem") or [],
+    await db.sessions.update_one(
+        {"session_id": session_id},
+        {"$set": {"tutoring_mode": mode, "updated_at": now_utc().isoformat()}}
     )
+    return {"ok": True, "mode": mode}
 
 
 @app.post("/session/upload", response_model=StartSessionResponse)
@@ -296,9 +214,79 @@ async def upload_question(question: dict[str, Any]) -> StartSessionResponse:
         {"$set": question},
         upsert=True
     )
-
     return await start_session(question_id)
 
+
+@app.get("/session/{session_id}", response_model=SessionSnapshotResponse)
+async def get_session(session_id: str) -> SessionSnapshotResponse:
+    session = await load_session_or_404(session_id)
+    question = await load_question_or_404(session["question_id"])
+    steps_dict = question.get("steps_analysis", {})
+    if not isinstance(steps_dict, dict):
+        raise HTTPException(422, "Malformed question: steps_analysis must be an object")
+
+    step_keys = sort_step_keys(steps_dict)
+    completed_list = session.get("completed_steps") or []
+    
+    return SessionSnapshotResponse(
+        session_id=session["session_id"],
+        question_id=session["question_id"],
+        completed_steps=completed_list,
+        focused_step=session.get("current_focused_step"),
+        is_complete=len(completed_list) >= len(step_keys),
+        notebook_history=session.get("notebook_history", []),
+        chat_history=session.get("chat_history", []),
+        tutoring_mode=session.get("tutoring_mode", "socratic"),
+        steps_metadata=steps_dict,
+        difficulty=question.get("difficulty", "medium"),
+        theorems=question.get("Theorem") or [],
+    )
+
+
+# ==========================================
+# STATE MACHINE COMPLIANT V3 SESSION START
+# ==========================================
+
+@app.post("/session/start/{question_id}", response_model=StartSessionResponse)
+async def start_session(question_id: str) -> StartSessionResponse:
+    question = await load_question_or_404(question_id)
+    session_id = str(uuid.uuid4())
+
+    steps_dict = preprocess_question_graph(question.get("steps_analysis", {}))
+    active_nodes = get_active_unlocked_nodes(steps_dict, set())
+    initial_focus = active_nodes[0] if active_nodes else None
+
+    # State Upgrade: Int-based attempts replace brittle timestamps
+    step_attempts = {step_id: 0 for step_id in steps_dict.keys()}
+    now_iso = now_utc().isoformat()
+
+    await db.sessions.insert_one(
+        {
+            "session_id": session_id,
+            "question_id": question_id,
+            "completed_steps": [],
+            "current_focused_step": initial_focus,
+            "step_attempts": step_attempts,
+            "tutoring_mode": "socratic",
+            "notebook_history": [],
+            "chat_history": [],
+            "created_at": now_iso,
+            "updated_at": now_iso,
+        }
+    )
+
+    context, sub_questions = question_context(question)
+    return StartSessionResponse(
+        session_id=session_id,
+        question_id=question_id,
+        context=context,
+        sub_questions=sub_questions,
+    )
+
+
+# ==========================================
+# STATE MACHINE COMPLIANT V3 CHAT CORE
+# ==========================================
 
 @app.post("/chat/{session_id}", response_model=ChatResponse)
 @limiter.limit(CHAT_RATE_LIMIT)
@@ -309,22 +297,21 @@ async def tutor_chat(request: Request, session_id: str, body: ChatRequest) -> Ch
     steps_dict = preprocess_question_graph(question.get("steps_analysis", {}))
     step_keys = sort_step_keys(steps_dict)
 
-    completed_list = session.get("completed_steps") or []
-    completed_steps = set(completed_list)
+    completed_steps = set(session.get("completed_steps") or [])
+    step_attempts = session.get("step_attempts") or {}
+    current_focus = session.get("current_focused_step")
     tutoring_mode = session.get("tutoring_mode", "socratic")
-    step_start_times = session.get("step_start_times") or {}
+    now_iso = now_utc().isoformat()
 
-    now = now_utc()
-    now_iso = now.isoformat()
-    # Normalize step_start_times
+    # Ensure attempts structure is fully populated
     for k in step_keys:
-        if k not in step_start_times:
-            step_start_times[k] = now_iso
+        if k not in step_attempts:
+            step_attempts[k] = 0
 
-    is_complete = len(completed_steps) >= len(step_keys)
-    if is_complete:
+    # Safety Lock check
+    if len(completed_steps) >= len(step_keys):
         return ChatResponse(
-            ai_response="You've already finished this problem.",
+            ai_response="You have successfully resolved this entire physics problem! Excellent job.",
             phase=PedagogyPhase.REVEAL,
             is_correct=True,
             verifier_signal=VerifierSignal.CORRECT,
@@ -334,82 +321,104 @@ async def tutor_chat(request: Request, session_id: str, body: ChatRequest) -> Ch
             focused_step=None
         )
 
-    # --- PHASE 1: DETERMINISTIC MATH EVALUATION ---
+    # ==========================================
+    # PRE-CHECK: SECURITY FIREWALL & INTENT CHECK
+    # ==========================================
+    security_flag = await InputValidator.check_prompt_injection(body.user_text)
+    if security_flag == SecurityFlag.JAILBREAK:
+        return create_canned_response("I am a Physics Tutor AI. I cannot modify my system instructions.")
+    elif security_flag == SecurityFlag.OFF_TOPIC:
+        return create_canned_response("Let's stay focused on our physics problem. Where did we leave off?")
+    elif security_flag == SecurityFlag.INAPPROPRIATE:
+        return create_canned_response("Please keep your language respectful and focused on physics.")
 
-    # A. Final Answer Bypass
-    final_answers = question.get("answer") or []
-    if not isinstance(final_answers, list):
-        final_answers = [final_answers]
+    intent = InputValidator.detect_shortcut_intent(body.user_text)
+    if intent == UserIntent.EXPLICIT_HELP and current_focus:
+        # User is stuck. Force DIRECT pedagogical mode by bumping attempts
+        if step_attempts.get(current_focus, 0) < 3:
+            step_attempts[current_focus] = 3
 
-    for ans in final_answers:
-        is_bypass_correct, _ = ChronosEngine.verify_math(body.user_text, str(ans))
-        if is_bypass_correct:
-            completed_steps = set(step_keys)
-            db_updates = {
-                "$set": {
-                    "completed_steps": list(completed_steps),
-                    "current_focused_step": None,
-                    "updated_at": now_iso,
-                },
-                "$push": {
-                    "chat_history": {
-                        "$each": [
-                            {"role": "user", "content": body.user_text},
-                            {"role": "assistant", "content": "Brilliant! You jumped straight to the final answer."},
-                        ]
-                    }
-                }
-            }
-            await db.sessions.update_one({"session_id": session_id}, db_updates)
-            return ChatResponse(
-                ai_response="Brilliant! You jumped straight to the final answer.",
-                phase=PedagogyPhase.REVEAL,
-                is_correct=True,
-                verifier_signal=VerifierSignal.CORRECT,
-                is_complete=True,
-                notebook_updates=NotebookUpdates(),
-                new_active_nodes=[],
-                focused_step=None
-            )
-
-    # B. Parallel Active Step Check
-    active_nodes = get_active_unlocked_nodes(steps_dict, completed_steps)
+    # ==========================================
+    # PHASE 1: DETERMINISTIC MATH EVALUATION
+    # ==========================================
     matched_step = None
     verifier_signal = VerifierSignal.INCORRECT
 
-    for step_key in active_nodes:
-        node = steps_dict[step_key]
-        formula, final_value, theorem = extract_step_data_safe(node)
+    # Only verify math if student didn't explicitly yell "help"
+    if intent != UserIntent.EXPLICIT_HELP:
+        user_math_only = ChronosEngine.extract_math_from_text(body.user_text)
         
-        is_correct = False
-        if formula:
-            is_correct, signal = ChronosEngine.verify_math(body.user_text, formula)
-            if is_correct:
-                matched_step = step_key
-                verifier_signal = signal
-                break
-            elif signal == VerifierSignal.SIGN_FLIP:
-                verifier_signal = signal
+        # A. Final Answer Bypass Check
+        final_answers = question.get("answer") or []
+        if not isinstance(final_answers, list):
+            final_answers = [final_answers]
 
-        if final_value and not matched_step:
-            is_correct, signal = ChronosEngine.verify_math(body.user_text, final_value)
-            if is_correct:
-                matched_step = step_key
-                verifier_signal = signal
-                break
+        for ans in final_answers:
+            is_bypass_correct, _ = ChronosEngine.verify_math(user_math_only, str(ans))
+            if is_bypass_correct:
+                completed_steps = set(step_keys)
+                db_updates = {
+                    "$set": {
+                        "completed_steps": list(completed_steps),
+                        "current_focused_step": None,
+                        "updated_at": now_iso,
+                    },
+                    "$push": {
+                        "chat_history": {
+                            "$each": [
+                                {"role": "user", "content": body.user_text},
+                                {"role": "assistant", "content": "Brilliant! You jumped straight to the final answer."},
+                            ]
+                        }
+                    }
+                }
+                await db.sessions.update_one({"session_id": session_id}, db_updates)
+                return ChatResponse(
+                    ai_response="Brilliant! You jumped straight to the final answer.",
+                    phase=PedagogyPhase.REVEAL,
+                    is_correct=True,
+                    verifier_signal=VerifierSignal.CORRECT,
+                    is_complete=True,
+                    notebook_updates=NotebookUpdates(),
+                    new_active_nodes=[],
+                    focused_step=None
+                )
 
+        # B. Standard Active Node verification
+        active_nodes = get_active_unlocked_nodes(steps_dict, completed_steps)
+        for step_key in active_nodes:
+            node = steps_dict[step_key]
+            formula, final_value, theorem = extract_step_data_safe(node)
+            
+            is_correct = False
+            if formula:
+                is_correct, signal = ChronosEngine.verify_math(user_math_only, formula)
+                if is_correct:
+                    matched_step = step_key
+                    verifier_signal = signal
+                    break
+                elif signal == VerifierSignal.SIGN_FLIP:
+                    verifier_signal = signal
+
+            if final_value and not matched_step:
+                is_correct, signal = ChronosEngine.verify_math(user_math_only, final_value)
+                if is_correct:
+                    matched_step = step_key
+                    verifier_signal = signal
+                    break
+
+    # ==========================================
+    # PHASE 2: MATCH FOUND (LOCK AND MOVE)
+    # ==========================================
     if matched_step:
         completed_steps.add(matched_step)
         new_active = get_active_unlocked_nodes(steps_dict, completed_steps)
         new_focus = new_active[0] if new_active else None
-        
-        # Reset timers for newly unlocked steps
-        for step in new_active:
-            if step not in completed_steps:
-                step_start_times[step] = now.isoformat()
 
         node = steps_dict[matched_step]
         formula, final_value, theorem = extract_step_data_safe(node)
+        next_theorem = steps_dict[new_focus].get("physical_theorem") if new_focus else None
+
         official_solution = NotebookOfficialSolution(
             step_key=matched_step,
             theorem=theorem,
@@ -418,57 +427,52 @@ async def tutor_chat(request: Request, session_id: str, body: ChatRequest) -> Ch
             timestamp=now_iso,
         )
 
-        ai_response = f"Correct! You solved the step: {theorem}."
-        push_payload = {
-            "chat_history": {
-                "$each": [
-                    {"role": "user", "content": body.user_text},
-                    {"role": "assistant", "content": ai_response},
-                ]
-            },
-            "notebook_history": official_solution.model_dump(mode="json")
-        }
+        # Generates fast praise/transition (Under 500ms)
+        ai_response = await generate_transition_message(theorem, next_theorem)
 
         db_updates = {
-            "$push": push_payload,
+            "$push": {
+                "chat_history": {
+                    "$each": [
+                        {"role": "user", "content": body.user_text},
+                        {"role": "assistant", "content": ai_response},
+                    ]
+                },
+                "notebook_history": official_solution.model_dump(mode="json")
+            },
             "$set": {
                 "completed_steps": list(completed_steps),
                 "current_focused_step": new_focus,
-                "step_start_times": step_start_times,
+                "step_attempts": step_attempts,
                 "updated_at": now_iso,
             }
         }
         await db.sessions.update_one({"session_id": session_id}, db_updates)
 
-        is_complete_now = len(completed_steps) >= len(step_keys)
         return ChatResponse(
             ai_response=ai_response,
             phase=PedagogyPhase.REVEAL,
             is_correct=True,
             verifier_signal=verifier_signal,
-            is_complete=is_complete_now,
+            is_complete=len(completed_steps) >= len(step_keys),
             notebook_updates=NotebookUpdates(official_solution=official_solution),
             new_active_nodes=new_active,
             focused_step=new_focus
         )
 
-    # --- PHASE 2: LLM CHAT / NAVIGATION ENGINE ---
-    current_focus = session.get("current_focused_step")
+    # ==========================================
+    # PHASE 3: NO MATCH (TUTOR TURN & SYSTEM ACTIONS)
+    # ==========================================
+    if intent != UserIntent.EXPLICIT_HELP and current_focus:
+        step_attempts[current_focus] = step_attempts.get(current_focus, 0) + 1
+
+    active_nodes = get_active_unlocked_nodes(steps_dict, completed_steps)
     if not current_focus or current_focus not in active_nodes:
         current_focus = active_nodes[0] if active_nodes else None
 
-    phase = PedagogyPhase.SOCRATIC
-    phase_instruction = "Ask guiding questions. Maximum of two lines is allowed. Do not give formulas, substitutions, final values, or the answer."
-    if current_focus:
-        focus_start_str = step_start_times.get(current_focus)
-        if focus_start_str:
-            try:
-                focus_start = datetime.fromisoformat(focus_start_str)
-                if focus_start.tzinfo is None:
-                    focus_start = focus_start.replace(tzinfo=timezone.utc)
-                phase, phase_instruction = ChronosEngine.get_phase_context(focus_start)
-            except Exception:
-                pass
+    # Pedagogy governed by integer failures
+    current_attempts = step_attempts.get(current_focus, 0) if current_focus else 0
+    phase, phase_instruction = ChronosEngine.get_phase_context(current_attempts)
 
     theorem = "General Concept"
     hint = "Ask the learner what principle applies."
@@ -506,6 +510,7 @@ async def tutor_chat(request: Request, session_id: str, body: ChatRequest) -> Ch
 
     ai_response, dynamic_note, action = await complete_tutor_turn(messages)
 
+    # 100% RETENTION: Execute dynamic LLM background action dispatches
     official_solution = None
     if action:
         action_name = action.get("action")
@@ -515,9 +520,6 @@ async def tutor_chat(request: Request, session_id: str, body: ChatRequest) -> Ch
             completed_steps.add(target_step_id)
             active_nodes = get_active_unlocked_nodes(steps_dict, completed_steps)
             current_focus = active_nodes[0] if active_nodes else None
-            for step in active_nodes:
-                if step not in completed_steps:
-                    step_start_times[step] = now.isoformat()
 
             node = steps_dict[target_step_id]
             formula_act, val_act, theorem_act = extract_step_data_safe(node)
@@ -531,13 +533,14 @@ async def tutor_chat(request: Request, session_id: str, body: ChatRequest) -> Ch
         elif action_name == "jump_to_step" and target_step_id in active_nodes:
             current_focus = target_step_id
 
+    # Sync and format notebook logs
     notebook_entries = []
     if dynamic_note:
         notebook_entries.append(dynamic_note.model_dump(mode="json"))
     if official_solution:
         notebook_entries.append(official_solution.model_dump(mode="json"))
 
-    push_payload = {
+    db_payload_push = {
         "chat_history": {
             "$each": [
                 {"role": "user", "content": body.user_text},
@@ -546,26 +549,25 @@ async def tutor_chat(request: Request, session_id: str, body: ChatRequest) -> Ch
         }
     }
     if notebook_entries:
-        push_payload["notebook_history"] = {"$each": notebook_entries}
+        db_payload_push["notebook_history"] = {"$each": notebook_entries}
 
     db_updates = {
-        "$push": push_payload,
+        "$push": db_payload_push,
         "$set": {
             "completed_steps": list(completed_steps),
             "current_focused_step": current_focus,
-            "step_start_times": step_start_times,
+            "step_attempts": step_attempts,
             "updated_at": now_iso,
         }
     }
     await db.sessions.update_one({"session_id": session_id}, db_updates)
 
-    is_complete_now = len(completed_steps) >= len(step_keys)
     return ChatResponse(
         ai_response=ai_response,
         phase=phase,
         is_correct=False,
         verifier_signal=verifier_signal,
-        is_complete=is_complete_now,
+        is_complete=len(completed_steps) >= len(step_keys),
         notebook_updates=NotebookUpdates(
             dynamic_note=dynamic_note,
             official_solution=official_solution,
@@ -573,3 +575,19 @@ async def tutor_chat(request: Request, session_id: str, body: ChatRequest) -> Ch
         new_active_nodes=active_nodes,
         focused_step=current_focus
     )
+
+
+@app.on_event("startup")
+async def startup_event():
+    question = await db.question_library.find_one({"question_id": "phy_firefighter_001"})
+    if not question:
+        logger.info("Auto-seeding phy_firefighter_001...")
+        try:
+            from seed import question_data
+            await db.question_library.update_one(
+                {"question_id": "phy_firefighter_001"},
+                {"$set": question_data},
+                upsert=True
+            )
+        except ImportError:
+            logger.warning("seed.py not found. Skipping auto-seed.")
