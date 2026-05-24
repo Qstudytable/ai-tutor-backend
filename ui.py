@@ -22,14 +22,14 @@ if "current_question_id" not in st.session_state:
     st.session_state.current_question_id = "00899"
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [
-        {"role": "assistant", "content": "Welcome. I'm ready to help you work through this physics problem. Where would you like to start?"}
+        {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
     ]
 if "insights" not in st.session_state:
     st.session_state.insights = []
 if "question_context" not in st.session_state:
     st.session_state.question_context = ""
 if "tutoring_mode" not in st.session_state:
-    st.session_state.tutoring_mode = "Socratic Mode"
+    st.session_state.tutoring_mode = "Active — Socratic Mode"
 
 
 def sync_session_snapshot(session_id: str):
@@ -42,7 +42,7 @@ def sync_session_snapshot(session_id: str):
             st.session_state.chat_history = data.get("chat_history") or []
             st.session_state.insights = data.get("notebook_history") or []
             mode = data.get("tutoring_mode", "socratic")
-            st.session_state.tutoring_mode = "Socratic Mode" if mode == "socratic" else "Direct Mode"
+            st.session_state.tutoring_mode = "Active — Socratic Mode" if mode == "socratic" else "Active — Direct Mode"
         else:
             st.error(f"Failed to synchronize workspace state. Server returned code {res.status_code}.")
             st.stop()
@@ -52,7 +52,7 @@ def sync_session_snapshot(session_id: str):
 
 
 def init_session(q_id: str):
-    """Initializes session on Port 8000. Safely handles container warmups."""
+    """Initializes session on Port 8000. Automatically handles backend warmups."""
     base_url = BACKEND_URL.rstrip("/")
     url = f"{base_url}/session/start/{q_id.strip()}"
     
@@ -69,7 +69,7 @@ def init_session(q_id: str):
                     {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
                 ]
                 st.session_state.insights = []
-                st.session_state.tutoring_mode = "Socratic Mode"
+                st.session_state.tutoring_mode = "Active — Socratic Mode"
                 return  # Connection successful, exit function
             else:
                 st.error(f"Internal initialization failed (Status {res.status_code}).")
@@ -190,8 +190,8 @@ st.markdown(textwrap.dedent("""
     margin-bottom: 1.5rem; 
   }
   
-  /* Forces markdown text to style as Georgia serif, preserving LaTeX math parsing */
-  .stMarkdown p {
+  /* CRITICAL FIX: Restricts Georgia serif exclusively to the left workbook */
+  .workspace-sheet .stMarkdown p {
     font-family: Georgia, "Times New Roman", Times, serif !important;
     font-size: 1.15rem !important;
     line-height: 1.8 !important;
@@ -204,7 +204,7 @@ st.markdown(textwrap.dedent("""
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
-    margin-top: 2rem;
+    margin-top: 2.5rem;
     border-top: 1px solid #F0F0F2;
     padding-top: 1.5rem;
   }
@@ -218,7 +218,7 @@ st.markdown(textwrap.dedent("""
   .notebook-container {
     border: 1px solid #E5E5EA;
     border-radius: 4px;
-    padding: 3rem 1.5rem;
+    padding: 5rem 1.5rem;
     background-color: #F5F5F7;
     text-align: center;
     min-height: 120px;
@@ -240,11 +240,14 @@ st.markdown(textwrap.dedent("""
     background-color: #FFFFFF;
   }
 
-  /* Minimalist Chat panel vertical divider layout */
+  /* Clean editorial vertical divider line on the right-hand column */
   .right-chat-panel {
     border-left: 1px solid #E5E5EA;
     padding-left: 2rem;
     min-height: 75vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
   }
   
   .chat-mode-header {
@@ -254,6 +257,7 @@ st.markdown(textwrap.dedent("""
     color: #1D1D1F;
     margin-bottom: 0.2rem;
     letter-spacing: 0.04em;
+    text-transform: uppercase;
   }
   
   .chat-mode-subheader {
@@ -261,59 +265,33 @@ st.markdown(textwrap.dedent("""
     font-size: 0.72rem;
     font-weight: 500;
     color: #86868B;
-    margin-bottom: 1.5rem;
+    margin-bottom: 0.5rem;
   }
 
-  /* Socrates Light Gray Message Bubble (Image 2 style) */
-  .msg-socrates-card {
-    background-color: #F5F5F7;
-    border-radius: 8px;
-    padding: 15px 20px;
-    margin-bottom: 1.5rem;
+  /* Dialogue formatting matching Image 2 */
+  .msg-wrapper {
+    margin-bottom: 2rem;
+    text-align: left;
+  }
+  .msg-sender-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #1D1D1F;
+    margin-bottom: 0.5rem;
+    text-transform: capitalize;
+    letter-spacing: 0.02em;
+  }
+  .msg-content-text {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
     font-size: 0.95rem;
     line-height: 1.6;
     color: #1D1D1F;
-    max-width: 90%;
   }
-
-  /* You Solid Black Message Bubble (Image 2 style) */
-  .msg-you-card {
-    background-color: #000000;
-    color: #FFFFFF !important;
-    border-radius: 8px;
-    padding: 15px 20px;
-    margin-bottom: 1.5rem;
-    font-size: 0.95rem;
-    line-height: 1.6;
-    max-width: 90%;
-    margin-left: auto;
-    text-align: left;
-  }
-
-  .msg-sender-label-socrates {
-    font-size: 0.68rem;
-    font-weight: 700;
-    color: #86868B;
-    margin-bottom: 0.4rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
-  .msg-sender-label-you {
-    font-size: 0.68rem;
-    font-weight: 700;
-    color: #86868B;
-    margin-bottom: 0.4rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    text-align: right;
-  }
-
   .status-indicator {
-    font-family: -apple-system, sans-serif;
+    font-family: Georgia, "Times New Roman", serif;
     font-style: italic;
     color: #86868B;
-    font-size: 0.85rem;
+    font-size: 0.88rem;
     margin-top: 1.5rem;
   }
 
@@ -348,7 +326,7 @@ st.markdown(textwrap.dedent("""
   .chat-header-divider {
     border-bottom: 1px solid #E5E5EA;
     margin-bottom: 2rem;
-    margin-top: 0.5rem;
+    margin-top: 0.8rem;
   }
 
   /* Premium borderless input matching Image 2 */
@@ -363,7 +341,7 @@ st.markdown(textwrap.dedent("""
 """), unsafe_allow_html=True)
 
 
-# --- VII. PIXEL-PERFECT NATIVE HEADER ---
+# --- VIII. PIXEL-PERFECT NATIVE HEADER ---
 st.markdown('<div class="top-bar-container">', unsafe_allow_html=True)
 h_col_left, h_col_center, h_col_right = st.columns([2, 5, 2])
 
@@ -387,7 +365,7 @@ with h_col_right:
 st.markdown('</div>', unsafe_allow_html=True)
 
 
-# --- VIII. THE 7% / 60% / 8% / 25% GRID SPLIT ---
+# --- IX. THE 7% / 60% / 8% / 25% GRID SPLIT ---
 col_space1, col_workspace, col_space2, col_chat = st.columns([0.07, 0.60, 0.08, 0.25])
 
 
@@ -399,9 +377,11 @@ with col_space1:
 
 
 # ==========================================
-# COLUMN 2: WORKSPACE SHEET (60%)
+# COLUMN 2: WORKSPACE CONTAINER (60%)
 # ==========================================
 with col_workspace:
+    st.markdown('<div class="workspace-sheet">', unsafe_allow_html=True)
+    
     st.markdown('<div class="tag">Physics / Class 12 / Electromagnetic Induction</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="title">Problem {st.session_state.current_question_id}</div>', unsafe_allow_html=True)
     
@@ -436,6 +416,8 @@ with col_workspace:
                 <div style="font-size: 0.78rem; color: #86868B; margin-top: 6px;">Target value verified: {insight.get('result', 'N/A')}</div>
             </div>
             """, unsafe_allow_html=True)
+            
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ==========================================
@@ -456,28 +438,21 @@ with col_chat:
     st.markdown(f'<div class="chat-mode-subheader">Active — {st.session_state.tutoring_mode}</div>', unsafe_allow_html=True)
     st.markdown('<div class="chat-header-divider"></div>', unsafe_allow_html=True)
     
-    # Chat container
+    # Clean Dialogue Stream
     chat_container = st.container(height=450, border=False)
     
     with chat_container:
         for msg in st.session_state.chat_history:
-            if msg["role"] == "assistant" or msg["role"] == "tutor":
-                st.markdown(f"""
-                <div class="msg-wrapper">
-                    <div class="msg-sender-label-socrates">Socrates</div>
-                    <div class="msg-socrates-card">{msg["content"]}</div>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                <div class="msg-wrapper">
-                    <div class="msg-sender-label-you">You</div>
-                    <div class="msg-you-card">{msg["content"]}</div>
-                </div>
-                """, unsafe_allow_html=True)
+            sender = "Socrates" if msg["role"] == "assistant" or msg["role"] == "tutor" else "You"
+            st.markdown(f"""
+            <div class="msg-wrapper">
+                <div class="msg-sender-label">{sender}</div>
+                <div class="msg-content-text">{msg["content"]}</div>
+            </div>
+            """, unsafe_allow_html=True)
             
-    # Minimal Chat Input pinned at the base
-    user_input = st.chat_input("Type your logic or formula...")
+    # Minimal Chat Input pinned at the base with target bottom-border overrides
+    user_input = st.chat_input("Type logic or formula...")
     
     if user_input:
         st.session_state.chat_history.append({"role": "user", "content": user_input})
@@ -485,8 +460,8 @@ with col_chat:
         with chat_container:
             st.markdown(f"""
             <div class="msg-wrapper">
-                <div class="msg-sender-label-you">You</div>
-                <div class="msg-you-card">{user_input}</div>
+                <div class="msg-sender-label">You</div>
+                <div class="msg-content-text">{user_input}</div>
             </div>
             """, unsafe_allow_html=True)
             
@@ -520,8 +495,8 @@ with col_chat:
             
             st.markdown(f"""
             <div class="msg-wrapper">
-                <div class="msg-sender-label-socrates">Socrates</div>
-                <div class="msg-socrates-card">{ai_response}</div>
+                <div class="msg-sender-label">Socrates</div>
+                <div class="msg-content-text">{ai_response}</div>
             </div>
             """, unsafe_allow_html=True)
             
