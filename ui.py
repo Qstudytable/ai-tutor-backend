@@ -22,7 +22,7 @@ if "current_question_id" not in st.session_state:
     st.session_state.current_question_id = "00899"
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [
-        {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
+        {"role": "assistant", "content": "Welcome. I'm ready to help you work through this physics problem. Where would you like to start?"}
     ]
 if "insights" not in st.session_state:
     st.session_state.insights = []
@@ -52,7 +52,10 @@ def sync_session_snapshot(session_id: str):
 
 
 def init_session(q_id: str):
-    """Initializes session on Port 8000. Automatically handles backend warmups."""
+    """
+    Initializes session on Port 8000.
+    10-retry warmup buffer handles FastAPI startup caching delays silently.
+    """
     base_url = BACKEND_URL.rstrip("/")
     url = f"{base_url}/session/start/{q_id.strip()}"
     
@@ -75,6 +78,7 @@ def init_session(q_id: str):
                 st.error(f"Internal initialization failed (Status {res.status_code}).")
                 st.stop()
         except requests.exceptions.ConnectionError:
+            # Silence warmup warnings during the first 3 container boot attempts
             if attempt < max_retries - 1:
                 if attempt >= 3:
                     st.warning(f"Connecting to physics tutor engine... (Attempt {attempt + 1}/{max_retries})")
@@ -110,35 +114,40 @@ else:
     sync_session_snapshot(st.session_state.session_id)
 
 
-# --- EDITORIAL SYSTEM STYLING ---
+# --- PREMIUM SYSTEM STYLING (YOUR CUSTOM SPECIFICATIONS) ---
 st.markdown(textwrap.dedent("""
 <style>
+  /* Import Google Fonts directly */
+  @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap');
+
   /* Base editorial setup */
   html, body, [data-testid="stAppViewContainer"] {
-    background-color: #FFFFFF !important;
-    color: #1D1D1F !important;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: #FAFAF9 !important;
+    color: #121212 !important;
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    -webkit-font-smoothing: antialiased;
   }
   
-  /* Strip out standard dashboard margins and headers */
+  /* Strip Streamlit system garbage */
   header, footer, #MainMenu { display: none !important; }
   .block-container { padding: 1.5rem 0rem !important; max-width: 100% !important; }
 
   /* Premium Top Navigation Bar Container */
   .top-bar-container {
-    border-bottom: 1px solid #1D1D1F;
+    background-color: #FFFFFF;
+    border-bottom: 1px solid #EAE8E3;
     padding-bottom: 1rem;
     margin-bottom: 2rem;
-    padding-left: 7%;
-    padding-right: 7%;
+    padding-left: 4%;
+    padding-right: 4%;
   }
 
   .top-bar-title {
-    font-size: 0.85rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
+    font-size: 0.8rem;
+    font-weight: 500;
+    letter-spacing: 0.15em;
     text-transform: uppercase;
-    color: #1D1D1F;
+    color: #121212;
     margin-top: 10px;
   }
 
@@ -152,19 +161,19 @@ st.markdown(textwrap.dedent("""
   }
 
   .problem-indicator {
-    font-family: -apple-system, sans-serif;
-    font-size: 0.85rem;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.8rem;
     font-weight: 600;
-    border-bottom: 2px solid #1D1D1F;
-    color: #1D1D1F;
+    border-bottom: 1.5px solid #121212;
+    color: #121212;
     padding-bottom: 4px;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.05em;
   }
 
   .top-bar-right-links {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 600;
-    color: #1D1D1F;
+    color: #121212;
     letter-spacing: 0.08em;
     text-align: right;
     margin-top: 10px;
@@ -175,75 +184,96 @@ st.markdown(textwrap.dedent("""
 
   /* Left Panel Workspace Typography and Tags */
   .tag { 
-    font-size: 0.68rem; 
+    font-size: 0.7rem; 
     font-weight: 600; 
-    color: #86868B; 
-    letter-spacing: 0.08em; 
+    color: #90908C; 
+    letter-spacing: 0.12em; 
     text-transform: uppercase; 
-    margin-bottom: 0.8rem; 
+    margin-bottom: 1.25rem; 
   }
   .title { 
+    font-family: 'EB Garamond', serif;
     font-size: 1.8rem; 
-    font-weight: 600; 
+    font-weight: 400; 
     letter-spacing: -0.01em; 
-    color: #1D1D1F; 
+    color: #121212; 
     margin-bottom: 1.5rem; 
   }
   
-  /* CRITICAL FIX: Restricts Georgia serif exclusively to the left workbook */
+  /* Forces markdown text to style as EB Garamond serif, preserving LaTeX math parsing */
   .workspace-sheet .stMarkdown p {
-    font-family: Georgia, "Times New Roman", Times, serif !important;
-    font-size: 1.15rem !important;
+    font-family: 'EB Garamond', serif !important;
+    font-size: 17px !important;
     line-height: 1.8 !important;
-    color: #1D1D1F !important;
+    color: #121212 !important;
   }
 
-  /* Study Notebook Elements */
+  /* Study Notebook Elements - Active Crisp B&W Slate */
   .notebook-header-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
-    margin-top: 2.5rem;
-    border-top: 1px solid #F0F0F2;
-    padding-top: 1.5rem;
+    margin-top: 3rem;
+    border-top: 1px solid #EAE8E3;
+    padding-top: 2rem;
   }
   .notebook-title {
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: #1D1D1F;
+    color: #5A5A57;
   }
   .notebook-container {
-    border: 1px solid #E5E5EA;
-    border-radius: 4px;
-    padding: 5rem 1.5rem;
-    background-color: #F5F5F7;
-    text-align: center;
+    border: 1.5px solid #121212;
+    border-radius: 6px;
+    padding: 2.5rem 2rem;
+    background-color: #FFFFFF;
+    text-align: left;
     min-height: 120px;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
   }
   .notebook-placeholder {
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    color: #86868B;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: #5A5A57;
     font-size: 0.85rem;
+    line-height: 1.5;
   }
   .notebook-card {
-    border: 1px solid #E5E5EA;
-    border-radius: 4px;
-    padding: 1.2rem;
+    border: 1.5px solid #121212;
+    border-radius: 6px;
+    padding: 1.5rem 2rem;
     margin-bottom: 1rem;
     text-align: left;
     background-color: #FFFFFF;
   }
+  .card-label {
+    font-size: 0.65rem; 
+    font-weight: 700; 
+    color: #90908C; 
+    text-transform: uppercase; 
+    letter-spacing: 0.04em;
+  }
+  .card-value {
+    font-family: 'EB Garamond', serif; 
+    font-size: 1.2rem; 
+    font-weight: 500;
+    margin-top: 5px; 
+    color: #121212;
+  }
+  .card-meta {
+    font-size: 0.78rem; 
+    color: #5A5A57; 
+    margin-top: 6px;
+  }
 
-  /* Clean editorial vertical divider line on the right-hand column */
+  /* Minimalist Chat panel divider logic on the right-hand column */
   .right-chat-panel {
-    border-left: 1px solid #E5E5EA;
-    padding-left: 2rem;
+    border-left: 1px solid #EAE8E3;
+    padding-left: 1.75rem;
     min-height: 75vh;
     display: flex;
     flex-direction: column;
@@ -252,11 +282,11 @@ st.markdown(textwrap.dedent("""
   
   .chat-mode-header {
     text-align: left;
-    font-size: 0.82rem;
+    font-size: 0.75rem;
     font-weight: 700;
-    color: #1D1D1F;
+    color: #90908C;
     margin-bottom: 0.2rem;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
   }
   
@@ -264,11 +294,11 @@ st.markdown(textwrap.dedent("""
     text-align: left;
     font-size: 0.72rem;
     font-weight: 500;
-    color: #86868B;
+    color: #90908C;
     margin-bottom: 0.5rem;
   }
 
-  /* Dialogue formatting matching Image 2 */
+  /* Dialogue formatting matching your exact specification */
   .msg-wrapper {
     margin-bottom: 2rem;
     text-align: left;
@@ -276,22 +306,32 @@ st.markdown(textwrap.dedent("""
   .msg-sender-label {
     font-size: 0.72rem;
     font-weight: 700;
-    color: #1D1D1F;
+    color: #90908C;
     margin-bottom: 0.5rem;
-    text-transform: capitalize;
-    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
   .msg-content-text {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-    font-size: 0.95rem;
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    font-size: 13px;
     line-height: 1.6;
-    color: #1D1D1F;
+    color: #121212;
   }
+  
+  /* Socrates left-border accent override */
+  .msg-wrapper.system .msg-content-text {
+    font-family: 'EB Garamond', serif !important;
+    font-size: 14px;
+    border-left: 1.5px solid #121212;
+    padding-left: 0.75rem;
+    line-height: 1.6;
+  }
+  
   .status-indicator {
-    font-family: Georgia, "Times New Roman", serif;
+    font-family: 'EB Garamond', serif;
     font-style: italic;
-    color: #86868B;
-    font-size: 0.88rem;
+    color: #90908C;
+    font-size: 13px;
     margin-top: 1.5rem;
   }
 
@@ -308,23 +348,26 @@ st.markdown(textwrap.dedent("""
   div.stButton > button {
     border: none !important;
     background-color: transparent !important;
-    color: #86868B !important;
-    font-family: -apple-system, sans-serif !important;
-    font-size: 0.82rem !important;
-    font-weight: 500 !important;
+    color: #90908C !important;
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    font-size: 0.8rem !important;
+    font-weight: 600 !important;
     padding: 0px !important;
-    transition: color 0.2s ease;
+    transition: opacity 0.15s ease;
     line-height: 1 !important;
     height: auto !important;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
   div.stButton > button:hover {
-    color: #1D1D1F !important;
+    opacity: 0.7;
+    color: #121212 !important;
     background-color: transparent !important;
   }
   
   /* Horizontal line divider on the right column */
   .chat-header-divider {
-    border-bottom: 1px solid #E5E5EA;
+    border-bottom: 1px solid #EAE8E3;
     margin-bottom: 2rem;
     margin-top: 0.8rem;
   }
@@ -332,7 +375,7 @@ st.markdown(textwrap.dedent("""
   /* Premium borderless input matching Image 2 */
   [data-testid="stChatInput"] {
     border: none !important;
-    border-bottom: 1px solid #1D1D1F !important;
+    border-bottom: 1.5px solid #121212 !important;
     border-radius: 0px !important;
     background: #FFFFFF !important;
     padding: 0.2rem 0rem !important;
@@ -341,7 +384,7 @@ st.markdown(textwrap.dedent("""
 """), unsafe_allow_html=True)
 
 
-# --- VIII. PIXEL-PERFECT NATIVE HEADER ---
+# --- X. PIXEL-PERFECT NATIVE HEADER ---
 st.markdown('<div class="top-bar-container">', unsafe_allow_html=True)
 h_col_left, h_col_center, h_col_right = st.columns([2, 5, 2])
 
@@ -365,7 +408,7 @@ with h_col_right:
 st.markdown('</div>', unsafe_allow_html=True)
 
 
-# --- IX. THE 7% / 60% / 8% / 25% GRID SPLIT ---
+# --- XI. THE NEW 7% / 60% / 8% / 25% GRID SPLIT ---
 col_space1, col_workspace, col_space2, col_chat = st.columns([0.07, 0.60, 0.08, 0.25])
 
 
@@ -392,7 +435,7 @@ with col_workspace:
     insight_count = len(st.session_state.insights)
     st.markdown(f"""
     <div class="notebook-header-row">
-        <div class="notebook-title">Study Notebook</div>
+        <div class="notebook-title">Active Study Notebook</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -411,9 +454,9 @@ with col_workspace:
             rendered_steps.add(step_key)
             st.markdown(f"""
             <div class="notebook-card">
-                <div class="card-label" style="font-size: 0.64rem; font-weight:700; color:#86868B; text-transform:uppercase; letter-spacing: 0.04em;">{insight.get('theorem', 'Unlocked Step')}</div>
-                <div class="card-value" style="font-family: monospace; font-size:1.1rem; margin-top:5px; color:#1D1D1F;">{insight.get('formula', '')}</div>
-                <div style="font-size: 0.78rem; color: #86868B; margin-top: 6px;">Target value verified: {insight.get('result', 'N/A')}</div>
+                <div class="card-label">{insight.get('theorem', 'Unlocked Step')}</div>
+                <div class="card-value">{insight.get('formula', '')}</div>
+                <div class="card-meta">Target value verified: {insight.get('result', 'N/A')}</div>
             </div>
             """, unsafe_allow_html=True)
             
@@ -421,7 +464,7 @@ with col_workspace:
 
 
 # ==========================================
-# COLUMN 3: MIDDLE GAP SPACE (8%)
+# COLUMN 3: MIDDLE GAP SPACE (8% - seamlessly aligned with workspace)
 # ==========================================
 with col_space2:
     st.empty()
@@ -434,7 +477,7 @@ with col_chat:
     st.markdown('<div class="right-chat-panel">', unsafe_allow_html=True)
     
     # Header Info Block
-    st.markdown('<div class="chat-mode-header">SOCRATES</div>', unsafe_allow_html=True)
+    st.markdown('<div class="chat-mode-header">Dialogue Assistant</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="chat-mode-subheader">Active — {st.session_state.tutoring_mode}</div>', unsafe_allow_html=True)
     st.markdown('<div class="chat-header-divider"></div>', unsafe_allow_html=True)
     
@@ -444,15 +487,16 @@ with col_chat:
     with chat_container:
         for msg in st.session_state.chat_history:
             sender = "Socrates" if msg["role"] == "assistant" or msg["role"] == "tutor" else "You"
+            wrapper_class = "msg-wrapper system" if sender == "Socrates" else "msg-wrapper"
             st.markdown(f"""
-            <div class="msg-wrapper">
+            <div class="{wrapper_class}">
                 <div class="msg-sender-label">{sender}</div>
                 <div class="msg-content-text">{msg["content"]}</div>
             </div>
             """, unsafe_allow_html=True)
             
     # Minimal Chat Input pinned at the base with target bottom-border overrides
-    user_input = st.chat_input("Type logic or formula...")
+    user_input = st.chat_input("Ask a question...")
     
     if user_input:
         st.session_state.chat_history.append({"role": "user", "content": user_input})
@@ -494,7 +538,7 @@ with col_chat:
                 ai_response = f"GCP Synchronizer Error: unable to connect to API gateway."
             
             st.markdown(f"""
-            <div class="msg-wrapper">
+            <div class="msg-wrapper system">
                 <div class="msg-sender-label">Socrates</div>
                 <div class="msg-content-text">{ai_response}</div>
             </div>
