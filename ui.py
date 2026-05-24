@@ -1,30 +1,25 @@
 import streamlit as st
 import requests
-from datetime import datetime as dt
+import datetime
+import textwrap
 
-# --- PAGE CONFIG ---
-st.set_page_config(
-    page_title="Physics Tutor Pro",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+# --- GLOBAL LAYOUT CONFIGURATION ---
+st.set_page_config(layout="wide", initial_sidebar_state="collapsed", page_title="Learning Platform")
 
-# CRITICAL CLOUD FIX: Use Docker-safe loopback address
 BACKEND_URL = "http://127.0.0.1:8000"
 
-# --- STATE MANAGEMENT ---
 if "session_id" not in st.session_state:
     st.session_state.session_id = None
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [
-        {"role": "Socrates", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
+        {"role": "assistant", "content": "System initialized. Asynchronous learning session active."}
     ]
 if "insights" not in st.session_state:
     st.session_state.insights = []
 if "status_text" not in st.session_state:
     st.session_state.status_text = ""
 
-# Auto-start session
+# Auto-start session silently
 if st.session_state.get("session_id") is None:
     try:
         res = requests.post(f"{BACKEND_URL}/session/start/00899", timeout=3)
@@ -33,207 +28,196 @@ if st.session_state.get("session_id") is None:
     except Exception:
         st.session_state.session_id = "sess_local_fallback"
 
-# --- INJECT EXACT HTML/CSS TEMPLATE ---
-st.markdown("""
-    <style>
-        /* Import Fonts */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Georgia&display=swap');
+# --- I. GLOBAL LAYOUT FRAMEWORK (CSS) ---
+# textwrap.dedent removes indentation so Streamlit doesn't create gray code blocks
+css_framework = textwrap.dedent("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Georgia&display=swap');
 
-        /* Hide Default Streamlit Elements */
-        #MainMenu {visibility: hidden;}
-        header {visibility: hidden;}
-        footer {visibility: hidden;}
-        
-        /* Master Reset for Streamlit Container */
-        .stApp, [data-testid="stAppViewContainer"] {
-            background-color: #FFFFFF !important;
-        }
-        .block-container {
-            padding: 0 !important;
-            max-width: 100% !important;
-            overflow-x: hidden;
-        }
+    /* Viewport Config */
+    html, body, [data-testid="stAppViewContainer"] {
+        height: 100vh;
+        width: 100vw;
+        overflow: hidden;
+        margin: 0;
+        padding: 0;
+        background-color: #ffffff;
+        font-family: 'Inter', sans-serif;
+    }
+    
+    /* Hide Streamlit Cruft */
+    header, footer, #MainMenu { display: none !important; }
+    .block-container { padding: 0 !important; max-width: 100% !important; }
 
-        /* --- VARIABLES --- */
-        :root {
-            --bg-main: #FFFFFF;
-            --bg-subtle: #F8FAFC;
-            --slate-900: #0F172A;
-            --slate-600: #475569;
-            --slate-400: #94A3B8;
-            --border-light: #E2E8F0;
-            --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            --font-academic: 'Georgia', ui-serif, serif;
-        }
+    /* Header Section */
+    .global-header {
+        height: 60px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 6%;
+        border-bottom: 1px solid #e9ecef;
+        background-color: #ffffff;
+    }
+    .header-brand { font-size: 0.9rem; font-weight: 700; letter-spacing: 0.05em; color: #212529; }
+    .header-utility { font-size: 0.85rem; color: #6c757d; }
 
-        /* --- HEADER --- */
-        .top-header {
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center;
-            padding: 0 40px; 
-            height: 56px;
-            border-bottom: 1px solid var(--border-light);
-            background-color: var(--bg-main);
-            font-family: var(--font-ui);
-        }
-        .top-header .logo { font-weight: 600; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--slate-900); }
-        .top-header .session-clock { font-weight: 500; font-size: 11px; color: var(--slate-600); letter-spacing: 1px; text-transform: uppercase; }
+    /* Main Workspace Split - Target Streamlit Columns */
+    [data-testid="column"]:nth-of-type(1) {
+        height: calc(100vh - 60px);
+        padding: 2% 5% 5% 10% !important;
+        overflow-y: auto;
+    }
+    [data-testid="column"]:nth-of-type(2) {
+        height: calc(100vh - 60px);
+        padding: 30px !important;
+        background-color: #f8f9fa;
+        border-left: 1px solid #e9ecef;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+    }
 
-        /* --- HACKING STREAMLIT COLUMNS TO MATCH 80/20 LAYOUT --- */
-        [data-testid="column"]:nth-of-type(1) {
-            padding: 48px 40px 0 40px !important;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        [data-testid="column"]:nth-of-type(2) {
-            border-left: 1px solid var(--border-light);
-            padding: 32px 24px !important;
-            background: var(--bg-main);
-            height: 100vh;
-        }
+    /* Primary Left Panel Typography */
+    .breadcrumb { font-size: 0.7rem; color: #6c757d; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 20px; font-weight: 600; }
+    .main-id-header { font-family: 'Georgia', serif; font-size: 1.8rem; font-weight: bold; color: #212529; margin-bottom: 25px; }
+    .body-desc { font-family: 'Georgia', serif; font-size: 1.05rem; line-height: 1.6; color: #333333; margin-bottom: 35px; }
+    
+    /* Active Context Container */
+    .context-container { border-left: 3px solid #212529; padding-left: 20px; margin-bottom: 60px; }
+    .context-label { font-size: 0.7rem; color: #6c757d; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-bottom: 8px; }
+    .context-desc { font-family: 'Georgia', serif; font-size: 0.95rem; color: #212529; line-height: 1.5; }
 
-        /* --- LEFT COLUMN DOM --- */
-        .content-column { width: 100%; max-width: 760px; font-family: var(--font-ui); }
-        .breadcrumbs { font-size: 11px; font-weight: 600; color: var(--slate-400); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 24px; }
-        .problem-heading { font-size: 22px; font-weight: 500; letter-spacing: -0.5px; margin-bottom: 24px; color: var(--slate-900); }
-        .problem-text { font-family: var(--font-academic); font-size: 18px; line-height: 1.7; color: var(--slate-900); margin-bottom: 48px; }
-        
-        .concept-block { border-left: 2px solid var(--slate-900); padding-left: 24px; margin-bottom: 48px; }
-        .concept-block strong { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--slate-600); display: block; margin-bottom: 8px;}
-        .concept-block p { font-family: var(--font-academic); font-size: 16px; line-height: 1.6; color: var(--slate-900); margin: 0;}
+    /* Study Notebook */
+    .notebook-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px; }
+    .notebook-label { font-size: 0.75rem; font-weight: 700; color: #212529; text-transform: uppercase; letter-spacing: 0.05em; }
+    .notebook-counter { font-size: 0.7rem; color: #adb5bd; }
+    .notebook-workspace { background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; min-height: 30vh; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px;}
+    .notebook-placeholder { font-family: 'Georgia', serif; font-style: italic; color: #adb5bd; font-size: 0.95rem; }
+    .notebook-item { width: 100%; border-bottom: 1px solid #e9ecef; padding-bottom: 15px; margin-bottom: 15px; }
 
-        /* Notebook */
-        .notebook-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px; }
-        .notebook-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--slate-900); }
-        .notebook-meta { font-size: 11px; color: var(--slate-400); }
-        .notebook-area { border: 1px solid var(--border-light); background-color: var(--bg-subtle); border-radius: 4px; display: flex; align-items: center; justify-content: center; min-height: 160px; margin-bottom: 48px; padding: 24px;}
-        .notebook-empty { font-family: var(--font-academic); font-style: italic; color: var(--slate-600); font-size: 15px; }
+    /* Secondary Right Panel Typography */
+    .chat-header { border-bottom: 1px solid #e9ecef; padding-bottom: 10px; margin-bottom: 20px; }
+    .chat-header-main { font-size: 0.85rem; font-weight: 700; text-transform: uppercase; color: #212529; letter-spacing: 0.05em; }
+    .chat-header-sub { font-size: 0.75rem; color: #6c757d; margin-top: 4px; }
+    
+    .chat-stream { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; margin-bottom: 20px; }
+    
+    .msg-block { display: flex; flex-direction: column; width: 100%; }
+    .msg-block.assistant { align-items: flex-start; }
+    .msg-block.user { align-items: flex-end; }
+    
+    .msg-sender { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: #6c757d; margin-bottom: 6px; }
+    .msg-content { font-size: 0.9rem; line-height: 1.5; color: #212529; padding: 12px 16px; border-radius: 6px; }
+    .msg-block.assistant .msg-content { background-color: #ffffff; border: 1px solid #e9ecef; width: 100%; }
+    .msg-block.user .msg-content { background-color: #e9ecef; max-width: 85%; }
+    
+    .status-feedback { font-family: 'Georgia', serif; font-style: italic; font-size: 0.85rem; color: #adb5bd; }
 
-        /* --- RIGHT COLUMN DOM --- */
-        .chat-feed { display: flex; flex-direction: column; gap: 32px; font-family: var(--font-ui); margin-bottom: 24px; }
-        .chat-mode-label { align-self: center; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--slate-400); margin-bottom: 8px; text-align: center;}
-        .msg-row { display: flex; flex-direction: column; }
-        .msg-label { font-size: 11px; font-weight: 600; color: var(--slate-900); margin-bottom: 6px; }
-        .msg-label.user { color: var(--slate-600); }
-        .msg-content { font-size: 14px; line-height: 1.6; color: var(--slate-900); }
-        .thinking { font-size: 13px; color: var(--slate-400); font-style: italic; }
+    /* Streamlit Input Wrapper Override */
+    [data-testid="stChatInput"] { border: 1px solid #e9ecef !important; border-radius: 45px !important; background: #ffffff !important; padding-right: 5px !important;}
+</style>
+""")
 
-        /* Streamlit Input Override to match custom box */
-        [data-testid="stChatInput"] {
-            border: 1px solid var(--border-light) !important;
-            border-radius: 8px !important;
-            background: var(--bg-subtle) !important;
-        }
-        [data-testid="stChatInput"]:focus-within {
-            border-color: var(--slate-400) !important;
-            background: var(--bg-main) !important;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
-        }
-    </style>
-""", unsafe_allow_html=True)
+st.markdown(css_framework, unsafe_allow_html=True)
 
-# --- TOP HEADER BAR ---
-now = dt.now()
-date_string = now.strftime("%b %d ‧ %I:%M %p").upper()
-st.markdown(f"""
-    <div class="top-header">
-        <div class="logo">Physics Tutor</div>
-        <div class="session-clock">{date_string}</div>
-    </div>
-""", unsafe_allow_html=True)
+# --- GLOBAL HEADER ---
+current_time = datetime.datetime.now().strftime("%Y-%m-%d | %H:%M UTC")
+header_html = f"""
+<div class="global-header">
+    <div class="header-brand">PLATFORM INTERFACE</div>
+    <div class="header-utility">{current_time}</div>
+</div>
+"""
+st.markdown(header_html, unsafe_allow_html=True)
 
-# --- 80/20 WORKSPACE LAYOUT ---
-col1, col2 = st.columns([4, 1.5], gap="small")
+# --- WORKSPACE SPLIT ---
+col1, col2 = st.columns([6, 4], gap="small")
 
-# --- LEFT PANE (DEEP WORK) ---
+# --- II. PRIMARY LEFT PANEL ---
 with col1:
     
-    # Render Notebook Contents
     if not st.session_state.insights:
-        notebook_html = '<div class="notebook-area"><span class="notebook-empty">Awaiting formulas and insights from chat...</span></div>'
+        notebook_content = '<span class="notebook-placeholder">Workspace empty. Awaiting asynchronous input...</span>'
     else:
-        notebook_html = '<div class="notebook-area" style="flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 16px;">'
+        notebook_content = ""
         for insight in st.session_state.insights:
-            notebook_html += f"""
-            <div style="border-bottom: 1px solid var(--border-light); padding-bottom: 12px;">
-                <strong style="font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--slate-600); display: block; margin-bottom: 4px;">{insight.get('theorem')}</strong>
-                <div style="font-family: monospace; font-size: 16px; color: var(--slate-900); margin-bottom: 4px;">{insight.get('formula')}</div>
-                <div style="font-size: 12px; color: var(--slate-400);">Value: {insight.get('result', 'N/A')}</div>
+            notebook_content += f"""
+            <div class="notebook-item">
+                <div style="font-size: 0.7rem; font-weight: 600; color: #6c757d; margin-bottom: 5px;">{insight.get('theorem')}</div>
+                <div style="font-family: monospace; font-size: 1rem; color: #212529;">{insight.get('formula')}</div>
             </div>
             """
-        notebook_html += '</div>'
 
-    # Inject Entire Left DOM
-    st.markdown(f"""
-        <div class="content-column">
-            <div class="breadcrumbs">Class 12 ‧ Electromagnetic Induction</div>
-            <div class="problem-heading">Problem 00899</div>
-            
-            <div class="problem-text">
-                A rectangular coil has <i>N = 100</i> turns, with side lengths <i>ab = 30cm</i> and <i>ad = 20cm</i>. 
-                It is placed in a uniform magnetic field with a magnetic induction strength of <i>B = 0.8T</i>. 
-                The coil rotates uniformly about the axis O' starting from the position shown in the diagram, 
-                with an angular velocity of <i>&omega; = 100&pi;</i> rad/s.
-            </div>
-            
-            <div class="concept-block">
-                <strong>Active Concept</strong>
-                <p>Apply Faraday's law of electromagnetic induction to find the maximum induced electromotive force in a rotating coil.</p>
-            </div>
+    left_panel_html = f"""
+<div class="breadcrumb">CATEGORY / SUB-MODULE AREA</div>
 
-            <div class="notebook-header">
-                <span class="notebook-title">Study Notebook</span>
-                <span class="notebook-meta">{len(st.session_state.insights)} Insights Recorded</span>
-            </div>
-            
-            {notebook_html}
-        </div>
-    """, unsafe_allow_html=True)
+<div class="main-id-header">Main Content ID Header</div>
 
-# --- RIGHT PANE (CHAT UTILITY) ---
+<div class="body-desc">
+    This is the body description block. It hosts the multi-line structural content zone, styled entirely in a highly legible serif typography system. The text here spans multiple lines to establish visual weight and reading rhythm before handing off to the interactive elements below.
+</div>
+
+<div class="context-container">
+    <div class="context-label">Active Context Container</div>
+    <div class="context-desc">Inner description field formatting. Anchored by the structural left-border indicator.</div>
+</div>
+
+<div class="notebook-header">
+    <span class="notebook-label">Study Notebook Element</span>
+    <span class="notebook-counter">{len(st.session_state.insights)} ENTRIES LOGGED</span>
+</div>
+
+<div class="notebook-workspace">
+    {notebook_content}
+</div>
+"""
+    st.markdown(left_panel_html, unsafe_allow_html=True)
+
+
+# --- III. SECONDARY RIGHT PANEL ---
 with col2:
     
-    # Generate Chat Feed DOM
-    chat_html = '<div class="chat-feed"><div class="chat-mode-label">Socratic Mode</div>'
-    
+    # Right panel structure
+    chat_html = """
+<div class="chat-header">
+    <div class="chat-header-main">Interactive Chat Interface</div>
+    <div class="chat-header-sub">System Status: Awaiting User Input</div>
+</div>
+
+<div class="chat-stream">
+"""
     for msg in st.session_state.chat_history:
-        role = msg["role"]
-        is_user = role == "You"
-        label_class = "msg-label user" if is_user else "msg-label"
-        display_name = "You" if is_user else "Socrates"
-        content = msg["content"]
+        role_class = "user" if msg["role"] == "You" else "assistant"
+        sender_name = "User Profile" if msg["role"] == "You" else "Assistant Profile"
         
         chat_html += f"""
-        <div class="msg-row">
-            <div class="{label_class}">{display_name}</div>
-            <div class="msg-content">{content}</div>
-        </div>
-        """
+    <div class="msg-block {role_class}">
+        <div class="msg-sender">{sender_name}</div>
+        <div class="msg-content">{msg["content"]}</div>
+    </div>
+"""
         
     if st.session_state.status_text:
         chat_html += f"""
-        <div class="msg-row">
-            <div class="thinking">{st.session_state.status_text}</div>
-        </div>
-        """
+    <div class="msg-block assistant">
+        <div class="status-feedback">{st.session_state.status_text}</div>
+    </div>
+"""
         
-    chat_html += '</div>'
-    
-    # Inject Chat DOM
+    chat_html += "</div>"
     st.markdown(chat_html, unsafe_allow_html=True)
 
-    # Input Box at bottom of column
-    user_input = st.chat_input("Type logic or formula...")
+    # Input Box Tool
+    user_input = st.chat_input("Type your response here...")
     
     if user_input:
         st.session_state.chat_history.append({"role": "You", "content": user_input})
-        st.session_state.status_text = "Analyzing physics principles..."
+        st.session_state.status_text = "Processing asynchronous request..."
         st.rerun()
 
-# --- BACKEND PROCESSOR (Runs if status indicates loading) ---
-if st.session_state.status_text == "Analyzing physics principles...":
+# --- BACKEND LOGIC ROUTER ---
+if st.session_state.status_text == "Processing asynchronous request...":
     last_user_message = st.session_state.chat_history[-1]["content"]
      
     try:
@@ -245,7 +229,7 @@ if st.session_state.status_text == "Analyzing physics principles...":
         if response.status_code == 200:
             data = response.json()
             st.session_state.chat_history.append({
-                "role": "Socrates",
+                "role": "assistant",
                 "content": data.get("ai_response")
             })
             nb_updates = data.get("notebook_updates", {})
@@ -253,13 +237,13 @@ if st.session_state.status_text == "Analyzing physics principles...":
                 st.session_state.insights.append(nb_updates["official_solution"])
         else:
             st.session_state.chat_history.append({
-                "role": "Socrates",
-                "content": "I apologize, but I've encountered an issue evaluating the equations. Let's try to look at this step again."
+                "role": "assistant",
+                "content": "System error: Feedback loop disrupted."
             })
     except Exception:
         st.session_state.chat_history.append({
-            "role": "Socrates",
-            "content": "The logic engine is starting up. Please give me a second and try again!"
+            "role": "assistant",
+            "content": "API synchronization in progress. Please hold."
         })
        
     st.session_state.status_text = ""
