@@ -10,16 +10,14 @@ st.set_page_config(
     page_title="Physics Tutor"
 )
 
+# Connects directly to your live GCP backend API gateway
 BACKEND_URL = "http://127.0.0.1:8000"
-MVP_QUESTIONS = ["00899", "00900", "00901"]
 
 # --- STATE MANAGEMENT & RECOVERY ---
-if "q_index" not in st.session_state:
-    st.session_state.q_index = 0
-if "current_question_id" not in st.session_state:
-    st.session_state.current_question_id = MVP_QUESTIONS[st.session_state.q_index]
 if "session_id" not in st.session_state:
     st.session_state.session_id = None
+if "current_question_id" not in st.session_state:
+    st.session_state.current_question_id = "00899"
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [
         {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
@@ -29,23 +27,29 @@ if "insights" not in st.session_state:
 if "question_context" not in st.session_state:
     st.session_state.question_context = ""
 if "tutoring_mode" not in st.session_state:
-    st.session_state.tutoring_mode = "Socratic Mode"
+    st.session_state.tutoring_mode = "SOCRATIC MODE"
 
-# Sync session details from backend snapshot
+
 def sync_session_snapshot(session_id: str):
+    """Syncs state dynamically from MongoDB if the browser is refreshed."""
     try:
-        res = requests.get(f"{BACKEND_URL}/session/{session_id}", timeout=3)
+        res = requests.get(f"{BACKEND_URL}/session/{session_id}", timeout=5)
         if res.status_code == 200:
             data = res.json()
             st.session_state.chat_history = data.get("chat_history") or []
             st.session_state.insights = data.get("notebook_history") or []
             mode = data.get("tutoring_mode", "socratic")
-            st.session_state.tutoring_mode = "Socratic Mode" if mode == "socratic" else "Direct Mode"
-    except Exception:
-        pass
+            st.session_state.tutoring_mode = "SOCRATIC MODE" if mode == "socratic" else "DIRECT MODE"
+        else:
+            st.error(f"Sync Failure: Backend returned status code {res.status_code}.")
+            st.stop()
+    except Exception as e:
+        st.error(f"State synchronization failed. Cannot reach tutor API: {e}")
+        st.stop()
 
-# Initialize session
+
 def init_session(q_id: str):
+    """Initializes a new attempt-based tracking session on GCP."""
     try:
         res = requests.post(f"{BACKEND_URL}/session/start/{q_id}", timeout=5)
         if res.status_code == 200:
@@ -57,87 +61,108 @@ def init_session(q_id: str):
                 {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
             ]
             st.session_state.insights = []
-            st.session_state.tutoring_mode = "Socratic Mode"
-    except Exception:
-        # Editorial simulation fallback
-        st.session_state.session_id = f"demo_fallback_{q_id}"
-        st.session_state.current_question_id = q_id
-        st.session_state.question_context = (
-            "A rectangular coil has $N = 100$ turns, with side lengths $ab = 30\\text{cm}$ and $ad = 20\\text{cm}$. "
-            "It is placed in a uniform magnetic field with a magnetic induction strength of $B = 0.8\\text{T}$. "
-            "The coil rotates uniformly about the axis O' starting from the position shown in the diagram, "
-            "with an angular velocity of $\\omega = 100\\pi$ rad/s."
-        )
-        st.session_state.chat_history = [
-            {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
-        ]
-        st.session_state.insights = []
+            st.session_state.tutoring_mode = "SOCRATIC MODE"
+        else:
+            st.error(f"Initialization Failed: Backend returned status code {res.status_code}.")
+            st.stop()
+    except Exception as e:
+        st.error(f"Could not connect to live GCP Tutor Engine: {e}")
+        st.stop()
 
+
+def navigate(direction: str):
+    """Queries backend navigation routing to step through playlist cleanly."""
+    try:
+        res = requests.get(f"{BACKEND_URL}/questions/navigate/{st.session_state.current_question_id}/{direction}", timeout=5)
+        if res.status_code == 200:
+            next_q_id = res.json().get("question_id")
+            if next_q_id:
+                init_session(next_q_id)
+        else:
+            st.error(f"Navigation error: API returned {res.status_code}")
+    except Exception as e:
+        st.error(f"Could not reach navigation endpoint: {e}")
+
+
+# --- INITIALIZATION RUNNER ---
 if st.session_state.session_id is None:
     init_session(st.session_state.current_question_id)
 else:
-    if not st.session_state.session_id.startswith("demo_fallback_"):
-        sync_session_snapshot(st.session_state.session_id)
+    sync_session_snapshot(st.session_state.session_id)
 
 
-# --- EDITORIAL MINIMALIST CSS ARCHITECTURE ---
+# --- EDITORIAL SYSTEM STYLING ---
 st.markdown(textwrap.dedent("""
 <style>
-  /* Base editorial typography settings */
+  /* Base editorial setup */
   html, body, [data-testid="stAppViewContainer"] {
+    background-color: #FFFFFF !important;
+    color: #1D1D1F !important;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background-color: #FFFFFF;
-    color: #1D1D1F;
   }
   
-  /* Hide standard Streamlit elements */
+  /* Strip out standard dashboard margins and headers */
   header, footer, #MainMenu { display: none !important; }
-  .block-container { padding: 1.5rem 4rem !important; max-width: 100% !important; }
+  .block-container { padding: 1.5rem 0rem !important; max-width: 100% !important; }
 
-  /* Top Bar Separator Styling */
+  /* Premium Top Navigation Bar */
   .top-bar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid #E5E5EA;
+    border-bottom: 1px solid #F0F0F2;
     padding-bottom: 0.8rem;
     margin-bottom: 2rem;
+    margin-left: 7%;
+    margin-right: 20%;
   }
   .top-bar-title {
-    font-size: 0.8rem;
+    font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: #1D1D1F;
   }
   .top-bar-date {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-weight: 500;
     color: #86868B;
     letter-spacing: 0.05em;
   }
 
-  /* Editorial Left Column Layout */
-  .tag { font-size: 0.72rem; font-weight: 600; color: #86868B; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 1rem; }
-  .title { font-size: 1.8rem; font-weight: 600; letter-spacing: -0.01em; color: #1D1D1F; margin-bottom: 1.5rem; }
-  
-  /* High readability editorial font for mathematical word problems */
-  .problem-text {
-    font-family: Georgia, "Times New Roman", Times, serif;
-    font-size: 1.22rem;
-    line-height: 1.8;
-    color: #1D1D1F;
-    margin-bottom: 2rem;
+  /* Left Panel Workspace Typography and Tags */
+  .tag { 
+    font-size: 0.68rem; 
+    font-weight: 600; 
+    color: #86868B; 
+    letter-spacing: 0.08em; 
+    text-transform: uppercase; 
+    margin-bottom: 0.8rem; 
+  }
+  .title { 
+    font-size: 1.6rem; 
+    font-weight: 600; 
+    letter-spacing: -0.01em; 
+    color: #1D1D1F; 
+    margin-bottom: 1.5rem; 
   }
   
-  /* Active Concept Card */
+  /* CRITICAL FIX: Forces markdown text to style as Georgia serif, preserving LaTeX math parsing */
+  .stMarkdown p {
+    font-family: Georgia, "Times New Roman", Times, serif !important;
+    font-size: 1.15rem !important;
+    line-height: 1.8 !important;
+    color: #1D1D1F !important;
+  }
+  
+  /* Active Concept metadata box with a left vertical border line */
   .active-concept-section {
-    border-left: 2px solid #1D1D1F;
+    border-left: 1px solid #1D1D1F;
     padding-left: 1.2rem;
-    margin: 2.5rem 0;
+    margin: 2.2rem 0;
   }
   .active-concept-label {
-    font-size: 0.65rem;
+    font-size: 0.62rem;
     font-weight: 700;
     color: #86868B;
     letter-spacing: 0.08em;
@@ -146,34 +171,36 @@ st.markdown(textwrap.dedent("""
   }
   .active-concept-desc {
     font-family: Georgia, "Times New Roman", serif;
-    font-size: 1.08rem;
+    font-size: 1rem;
     line-height: 1.6;
     color: #1D1D1F;
   }
 
-  /* Study Notebook empty/filled states */
+  /* Study Notebook Elements */
   .notebook-header-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
-    margin-top: 2rem;
+    margin-top: 2.5rem;
+    border-bottom: 1px solid #F0F0F2;
+    padding-bottom: 0.5rem;
   }
   .notebook-title {
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: #1D1D1F;
   }
   .notebook-count {
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     color: #86868B;
   }
   .notebook-container {
     border: 1px solid #E5E5EA;
-    border-radius: 8px;
-    padding: 3rem 1.5rem;
+    border-radius: 4px;
+    padding: 5rem 1.5rem;
     background-color: #FFFFFF;
     text-align: center;
     min-height: 250px;
@@ -185,50 +212,51 @@ st.markdown(textwrap.dedent("""
     font-family: Georgia, "Times New Roman", serif;
     font-style: italic;
     color: #86868B;
-    font-size: 1.05rem;
+    font-size: 0.98rem;
   }
   .notebook-card {
     border: 1px solid #E5E5EA;
-    border-radius: 6px;
+    border-radius: 4px;
     padding: 1.2rem;
     margin-bottom: 1rem;
     text-align: left;
     background-color: #FFFFFF;
   }
 
-  /* Minimalist Chat Right Column divider */
+  /* Minimalist Chat panel divider logic on the right-hand column */
   .right-chat-panel {
     border-left: 1px solid #E5E5EA;
-    padding-left: 2.5rem;
-    height: 80vh;
+    padding-left: 1.8rem;
+    min-height: 75vh;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
   }
   
-  /* Chat Header Mode Label */
   .chat-mode-header {
     text-align: center;
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     font-weight: 700;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.12em;
     color: #86868B;
     text-transform: uppercase;
-    margin-bottom: 2rem;
-  }
-
-  /* Minimal Text Messages without Bubbles */
-  .msg-wrapper {
     margin-bottom: 1.8rem;
   }
+
+  /* Unbubbled typography chat wrapper */
+  .msg-wrapper {
+    margin-bottom: 1.5rem;
+  }
   .msg-sender {
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     font-weight: 700;
     color: #1D1D1F;
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.3rem;
+    letter-spacing: 0.02em;
   }
   .msg-content {
-    font-size: 0.96rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    font-size: 0.92rem;
     line-height: 1.6;
     color: #1D1D1F;
   }
@@ -236,38 +264,46 @@ st.markdown(textwrap.dedent("""
     font-family: Georgia, "Times New Roman", serif;
     font-style: italic;
     color: #86868B;
-    font-size: 0.92rem;
+    font-size: 0.88rem;
     margin-top: 1rem;
   }
 
-  /* Target Streamlit native chat elements to match minimal typography */
+  /* Override Streamlit Chat layout elements */
   div[data-testid="stChatMessage"] {
     background-color: transparent !important;
     border: none !important;
     box-shadow: none !important;
     padding: 0 !important;
-    margin-bottom: 1.8rem !important;
-  }
-  div[data-testid="stChatMessageHeader"] {
-    font-size: 0.78rem !important;
-    font-weight: 700 !important;
-    color: #1D1D1F !important;
-    margin-bottom: 0.4rem !important;
-    text-transform: capitalize;
+    margin-bottom: 1.5rem !important;
   }
   
-  /* Inline minimalist input overrides */
+  /* Rounded navigation buttons */
+  [data-testid="stButton"] button {
+    border-radius: 24px;
+    border: 1px solid #E5E5EA;
+    background: #FFFFFF;
+    color: #1D1D1F;
+    font-weight: 500;
+    font-size: 0.8rem;
+    padding: 0.2rem 1rem;
+  }
+  [data-testid="stButton"] button:hover {
+    background: #F5F5F7;
+    border-color: #D2D2D7;
+  }
+  
+  /* Clean editorial input overrides */
   [data-testid="stChatInput"] {
     border: 1px solid #E5E5EA !important;
-    border-radius: 8px !important;
+    border-radius: 4px !important;
     background: #FFFFFF !important;
-    padding: 0.3rem !important;
+    padding: 0.2rem !important;
   }
 </style>
 """), unsafe_allow_html=True)
 
 
-# --- I. EDITORIAL HEADER ---
+# --- IV. TOP BAR NAVIGATION ---
 time_str = dt.now().strftime("%b %d · %I:%M %p").upper()
 st.markdown(f"""
 <div class="top-bar">
@@ -277,20 +313,29 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
-# --- II. WORKSPACE GRID SPLIT ---
-left_col, right_col = st.columns([5.8, 4.2], gap="large")
+# --- V. EXACT RATIOMETRIC GRID LAYOUT ---
+# 7% Space | 65% Workspace | 8% Space | 20% Tutor Chat
+col_space1, col_workspace, col_space2, col_chat = st.columns([0.07, 0.65, 0.08, 0.20])
+
 
 # ==========================================
-# LEFT PANEL: THE PHYSICS PROBLEM SHEET
+# COLUMN 1: LEFT BREATHING MARGIN (7%)
 # ==========================================
-with left_col:
+with col_space1:
+    st.empty()
+
+
+# ==========================================
+# COLUMN 2: WORKSPACE CONTAINER (65%)
+# ==========================================
+with col_workspace:
     st.markdown('<div class="tag">Class 12 · Electromagnetic Induction</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="title">Problem {st.session_state.current_question_id}</div>', unsafe_allow_html=True)
     
-    # Beautiful serif problem description
-    st.markdown(f'<div class="problem-text">{st.session_state.question_context}</div>', unsafe_allow_html=True)
+    # PROBLEM SHEET: Rendered natively to keep KaTeX engine parsing LaTeX math beautifully
+    st.markdown(st.session_state.question_context)
     
-    # Elegant Active Concept Card
+    # Active Concept block
     st.markdown("""
     <div class="active-concept-section">
         <div class="active-concept-label">Active Concept</div>
@@ -303,11 +348,11 @@ with left_col:
     st.markdown(f"""
     <div class="notebook-header-row">
         <div class="notebook-title">Study Notebook</div>
-        <div class="notebook-count">{insight_count} Insights Recorded</div>
+        <div class="notebook-count">{insight_count} Insights Unlocked</div>
     </div>
     """, unsafe_allow_html=True)
     
-    # Notebook Dynamic Rendering
+    # Study Notebook content card
     if not st.session_state.insights:
         st.markdown("""
         <div class="notebook-container">
@@ -315,32 +360,36 @@ with left_col:
         </div>
         """, unsafe_allow_html=True)
     else:
-        # Unlocked insights render cleanly in structured editorial blocks
         for insight in st.session_state.insights:
             st.markdown(f"""
             <div class="notebook-card">
-                <div class="card-label" style="font-size: 0.68rem; font-weight:700; color:#86868B; text-transform:uppercase;">{insight.get('theorem', 'Unlocked Step')}</div>
+                <div class="card-label" style="font-size: 0.64rem; font-weight:700; color:#86868B; text-transform:uppercase; letter-spacing: 0.04em;">{insight.get('theorem', 'Unlocked Step')}</div>
                 <div class="card-value" style="font-family: monospace; font-size:1.1rem; margin-top:5px; color:#1D1D1F;">{insight.get('formula', '')}</div>
-                <div style="font-size: 0.8rem; color: #86868B; margin-top: 6px;">Target value verified: {insight.get('result', 'N/A')}</div>
+                <div style="font-size: 0.78rem; color: #86868B; margin-top: 6px;">Target value verified: {insight.get('result', 'N/A')}</div>
             </div>
             """, unsafe_allow_html=True)
 
 
 # ==========================================
-# RIGHT PANEL: MINIMAL TUTOR INTERACTION
+# COLUMN 3: MIDDLE BREATHING MARGIN (8%)
 # ==========================================
-with right_col:
-    # We wrap in a visual spacer panel to apply left divider styling
+with col_space2:
+    st.empty()
+
+
+# ==========================================
+# COLUMN 4: MINIMALIST AI TUTOR CHAT (20%)
+# ==========================================
+with col_chat:
+    # Editorial wrapper for the chat column
     st.markdown(f'<div class="chat-mode-header">{st.session_state.tutoring_mode}</div>', unsafe_allow_html=True)
     
-    # Scrollable native clean list container
-    chat_container = st.container(height=480, border=False)
+    # Clean dialogue container
+    chat_container = st.container(height=450, border=False)
     
     with chat_container:
         for msg in st.session_state.chat_history:
-            sender = "Socrates" if msg["role"] == "assistant" else "You"
-            
-            # Render un-bubbled editorial message format
+            sender = "Socrates" if msg["role"] == "assistant" or msg["role"] == "tutor" else "You"
             st.markdown(f"""
             <div class="msg-wrapper">
                 <div class="msg-sender">{sender}</div>
@@ -348,13 +397,12 @@ with right_col:
             </div>
             """, unsafe_allow_html=True)
             
-    # Minimal Chat Input pinned beautifully at the bottom
+    # Minimal Chat Input pinned at the base
     user_input = st.chat_input("Type logic or formula...")
     
     if user_input:
         st.session_state.chat_history.append({"role": "user", "content": user_input})
         
-        # Display the user's text immediately
         with chat_container:
             st.markdown(f"""
             <div class="msg-wrapper">
@@ -363,7 +411,7 @@ with right_col:
             </div>
             """, unsafe_allow_html=True)
             
-            # Beautiful editorial status text during request lifecycle
+            # Subtle loading text during API request lifecycle
             status_placeholder = st.markdown('<div class="status-indicator">Analyzing physics principles...</div>', unsafe_allow_html=True)
             
             try:
@@ -372,26 +420,24 @@ with right_col:
                     json={"user_text": user_input},
                     timeout=15
                 )
-                status_placeholder.empty() # Remove loader status smoothly
+                status_placeholder.empty() # Remove loader smoothly
                 
                 if response.status_code == 200:
                     data = response.json()
                     ai_response = data.get("ai_response", "I'm having trouble analyzing this step.")
                     
-                    # Update tutoring mode display dynamically if it changes
                     backend_mode = data.get("phase", "SOCRATIC")
-                    st.session_state.tutoring_mode = "Socratic Mode" if backend_mode == "SOCRATIC" else "Direct Mode"
+                    st.session_state.tutoring_mode = "SOCRATIC MODE" if backend_mode == "SOCRATIC" else "DIRECT MODE"
                     
                     nb_updates = data.get("notebook_updates", {})
                     if nb_updates and nb_updates.get("official_solution"):
                         st.session_state.insights.append(nb_updates["official_solution"])
                 else:
-                    ai_response = "System error: Feedback loop disrupted."
-            except Exception:
+                    ai_response = f"GCP Engine Error: code {response.status_code}."
+            except Exception as e:
                 status_placeholder.empty()
-                ai_response = "API synchronization in progress. Please hold."
+                ai_response = f"GCP Synchronizer Error: unable to connect to API gateway."
             
-            # Print Socrates' reply
             st.markdown(f"""
             <div class="msg-wrapper">
                 <div class="msg-sender">Socrates</div>
