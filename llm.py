@@ -126,7 +126,7 @@ def _extract_text_and_note_and_action(response: Any) -> tuple[str, NotebookDynam
 async def complete_tutor_turn(messages: list[dict[str, str]]) -> tuple[str, NotebookDynamicNote | None, dict[str, Any] | None]:
     from litellm import completion
 
-    model = os.getenv("LLM_MODEL", "gemini/gemini-2.5-flash")
+    model = os.getenv("LLM_MODEL", "gemini/gemini-1.5-flash")
     try:
         response = await asyncio.to_thread(
             completion,
@@ -139,3 +139,22 @@ async def complete_tutor_turn(messages: list[dict[str, str]]) -> tuple[str, Note
     except Exception as e:
         # Failsafe so the API never crashes if the LLM provider blips
         return "I'm having a little trouble connecting to my logic engine. Can you explain your thought process?", None, None
+
+# ---> ADDED BACK THE MISSING FUNCTION <---
+async def generate_transition_message(solved_theorem: str, next_theorem: str | None) -> str:
+    from litellm import completion
+    if next_theorem:
+        prompt = f"The student just solved '{solved_theorem}'. Celebrate briefly (1 sentence), then introduce the next step: '{next_theorem}'. Ask a guiding question to start."
+    else:
+        prompt = f"The student just solved '{solved_theorem}' and finished the whole problem! Celebrate their success enthusiastically."
+        
+    model = os.getenv("LLM_MODEL", "gemini/gemini-1.5-flash")
+    try:
+        response = await asyncio.to_thread(
+            completion,
+            model=model,
+            messages=[{"role": "system", "content": prompt}]
+        )
+        return response.choices[0].message.content or "Great job! Let's move on."
+    except Exception:
+        return "Excellent work! Let's tackle the next part."
