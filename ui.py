@@ -43,27 +43,39 @@ def sync_session_snapshot(session_id: str):
         st.error(f"Failed to synchronize workspace state. Server returned code {res.status_code}.")
 
 def init_session(q_id: str):
-    """Initializes session and displays the raw backend error if it fails."""
+    """Initializes session and displays the raw response to debug the connection."""
     try:
-        res = requests.post(f"{BACKEND_URL}/session/start/{q_id}/", timeout=5, allow_redirects=True)
+        # We send the request strictly WITHOUT the trailing slash to match FastAPI's route
+        url = f"{BACKEND_URL}/session/start/{q_id}"
+        res = requests.post(url, timeout=5)
+        
         if res.status_code == 200:
-            data = res.json()
-            st.session_state.session_id = data.get("session_id")
-            st.session_state.current_question_id = data.get("question_id")
-            st.session_state.question_context = data.get("context")
-            st.session_state.chat_history = [
-                {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
-            ]
-            st.session_state.insights = []
-            st.session_state.tutoring_mode = "SOCRATIC MODE"
+            try:
+                data = res.json()
+                st.session_state.session_id = data.get("session_id")
+                st.session_state.current_question_id = data.get("question_id")
+                st.session_state.question_context = data.get("context")
+                st.session_state.chat_history = [
+                    {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
+                ]
+                st.session_state.insights = []
+                st.session_state.tutoring_mode = "SOCRATIC MODE"
+            except Exception as json_err:
+                st.error("JSON PARSING ERROR: Backend returned 200 OK but it was NOT JSON.")
+                st.write("Raw Response Text (First 500 chars):")
+                st.code(res.text[:500])
+                st.stop()
         else:
-            # THIS WILL PRINT THE EXACT ERROR CODE AND TEXT FROM GCP
             st.error(f"GCP Backend Error: Server returned status {res.status_code}")
-            st.code(res.text)
+            st.write("Response Headers:")
+            st.json(dict(res.headers))
+            st.write("Raw Error Text:")
+            st.code(res.text[:1000])
             st.stop()
     except Exception as e:
         st.error(f"Connection failed to {BACKEND_URL}: {e}")
         st.stop()
+
 
 
 # --- DYNAMIC BACKEND NAVIGATION ---
