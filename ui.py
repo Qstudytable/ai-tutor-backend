@@ -32,61 +32,61 @@ if "tutoring_mode" not in st.session_state:
 
 def sync_session_snapshot(session_id: str):
     """Syncs session state. Fails loudly if backend is unreachable."""
-    res = requests.get(f"{BACKEND_URL}/session/{session_id}", timeout=5)
-    if res.status_code == 200:
-        data = res.json()
-        st.session_state.chat_history = data.get("chat_history") or []
-        st.session_state.insights = data.get("notebook_history") or []
-        mode = data.get("tutoring_mode", "socratic")
-        st.session_state.tutoring_mode = "SOCRATIC MODE" if mode == "socratic" else "DIRECT MODE"
-    else:
-        st.error(f"Failed to synchronize workspace state. Server returned code {res.status_code}.")
+    try:
+        base_url = BACKEND_URL.rstrip("/")
+        res = requests.get(f"{base_url}/session/{session_id}", timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            st.session_state.chat_history = data.get("chat_history") or []
+            st.session_state.insights = data.get("notebook_history") or []
+            mode = data.get("tutoring_mode", "socratic")
+            st.session_state.tutoring_mode = "SOCRATIC MODE" if mode == "socratic" else "DIRECT MODE"
+        else:
+            st.error(f"Failed to synchronize workspace state. Server returned code {res.status_code}.")
+            st.stop()
+    except Exception as e:
+        st.error(f"State synchronization failed. Unable to connect to backend engine: {e}")
+        st.stop()
+
 
 def init_session(q_id: str):
-    """Initializes session and displays the raw response to debug the connection."""
+    """Initializes session. Breaks execution on backend connection failures."""
     try:
-        # We send the request strictly WITHOUT the trailing slash to match FastAPI's route
-        url = f"{BACKEND_URL}/session/start/{q_id}"
+        base_url = BACKEND_URL.rstrip("/")
+        url = f"{base_url}/session/start/{q_id.strip()}"
         res = requests.post(url, timeout=5)
         
         if res.status_code == 200:
-            try:
-                data = res.json()
-                st.session_state.session_id = data.get("session_id")
-                st.session_state.current_question_id = data.get("question_id")
-                st.session_state.question_context = data.get("context")
-                st.session_state.chat_history = [
-                    {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
-                ]
-                st.session_state.insights = []
-                st.session_state.tutoring_mode = "SOCRATIC MODE"
-            except Exception as json_err:
-                st.error("JSON PARSING ERROR: Backend returned 200 OK but it was NOT JSON.")
-                st.write("Raw Response Text (First 500 chars):")
-                st.code(res.text[:500])
-                st.stop()
+            data = res.json()
+            st.session_state.session_id = data.get("session_id")
+            st.session_state.current_question_id = data.get("question_id")
+            st.session_state.question_context = data.get("context")
+            st.session_state.chat_history = [
+                {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
+            ]
+            st.session_state.insights = []
+            st.session_state.tutoring_mode = "SOCRATIC MODE"
         else:
-            st.error(f"GCP Backend Error: Server returned status {res.status_code}")
-            st.write("Response Headers:")
-            st.json(dict(res.headers))
-            st.write("Raw Error Text:")
-            st.code(res.text[:1000])
-            st.stop()
+            st.error(f"Error: Could not spin up the physics tutor state engine on GCP (Status {res.status_code}).")
+            st.stop()  # Stop Streamlit execution cleanly
     except Exception as e:
-        st.error(f"Connection failed to {BACKEND_URL}: {e}")
+        st.error(f"Connection failed to live GCP Tutor Engine: {e}")
         st.stop()
-
 
 
 # --- DYNAMIC BACKEND NAVIGATION ---
 def navigate(direction: str):
-    res = requests.get(f"{BACKEND_URL}/questions/navigate/{st.session_state.current_question_id}/{direction}", timeout=5)
-    if res.status_code == 200:
-        next_q_id = res.json().get("question_id")
-        if next_q_id:
-            init_session(next_q_id)
-    else:
-        st.error("Navigation failed: Unable to fetch next problem state from GCP API.")
+    try:
+        base_url = BACKEND_URL.rstrip("/")
+        res = requests.get(f"{base_url}/questions/navigate/{st.session_state.current_question_id}/{direction}", timeout=5)
+        if res.status_code == 200:
+            next_q_id = res.json().get("question_id")
+            if next_q_id:
+                init_session(next_q_id)
+        else:
+            st.error("Navigation failed: Unable to fetch next problem state from GCP API.")
+    except Exception as e:
+        st.error(f"Navigation failed: Unable to connect to API gateway ({e}).")
 
 
 # --- INITIALIZATION RUNNER ---
@@ -308,7 +308,7 @@ st.markdown(textwrap.dedent("""
 """), unsafe_allow_html=True)
 
 
-# --- VII. EXACT HORIZONTAL GRID LAYOUT ---
+# --- VIII. EXACT HORIZONTAL GRID LAYOUT ---
 # 7% Space | 65% Workspace | 8% Space | 20% Tutor Chat
 col_space1, col_workspace, col_space2, col_chat = st.columns([0.07, 0.65, 0.08, 0.20])
 
@@ -410,8 +410,9 @@ with col_chat:
             status_placeholder = st.markdown('<div class="status-indicator">Analyzing physics principles...</div>', unsafe_allow_html=True)
             
             try:
+                base_url = BACKEND_URL.rstrip("/")
                 response = requests.post(
-                    f"{BACKEND_URL}/chat/{st.session_state.session_id}",
+                    f"{base_url}/chat/{st.session_state.session_id}",
                     json={"user_text": user_input},
                     timeout=15
                 )
