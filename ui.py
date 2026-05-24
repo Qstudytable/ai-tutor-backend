@@ -42,23 +42,28 @@ def sync_session_snapshot(session_id: str):
     else:
         st.error(f"Failed to synchronize workspace state. Server returned code {res.status_code}.")
 
-
 def init_session(q_id: str):
-    """Initializes session. Breaks execution on backend connection failures."""
-    res = requests.post(f"{BACKEND_URL}/session/start/{q_id}", timeout=5)
-    if res.status_code == 200:
-        data = res.json()
-        st.session_state.session_id = data.get("session_id")
-        st.session_state.current_question_id = data.get("question_id")
-        st.session_state.question_context = data.get("context")
-        st.session_state.chat_history = [
-            {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
-        ]
-        st.session_state.insights = []
-        st.session_state.tutoring_mode = "SOCRATIC MODE"
-    else:
-        st.error("Error: Could not spin up the physics tutor state engine on GCP.")
-        st.stop()  # Stop Streamlit execution cleanly
+    """Initializes session and displays the raw backend error if it fails."""
+    try:
+        res = requests.post(f"{BACKEND_URL}/session/start/{q_id}", timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            st.session_state.session_id = data.get("session_id")
+            st.session_state.current_question_id = data.get("question_id")
+            st.session_state.question_context = data.get("context")
+            st.session_state.chat_history = [
+                {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
+            ]
+            st.session_state.insights = []
+            st.session_state.tutoring_mode = "SOCRATIC MODE"
+        else:
+            # THIS WILL PRINT THE EXACT ERROR CODE AND TEXT FROM GCP
+            st.error(f"GCP Backend Error: Server returned status {res.status_code}")
+            st.code(res.text)
+            st.stop()
+    except Exception as e:
+        st.error(f"Connection failed to {BACKEND_URL}: {e}")
+        st.stop()
 
 
 # --- DYNAMIC BACKEND NAVIGATION ---
