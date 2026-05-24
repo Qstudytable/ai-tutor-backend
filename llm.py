@@ -126,7 +126,7 @@ def _extract_text_and_note_and_action(response: Any) -> tuple[str, NotebookDynam
 async def complete_tutor_turn(messages: list[dict[str, str]]) -> tuple[str, NotebookDynamicNote | None, dict[str, Any] | None]:
     from litellm import completion
 
-    model = os.getenv("LLM_MODEL", "gemini/gemini-1.5-flash")
+    model = os.getenv("LLM_MODEL", "gemini/gemini-2.5-flash")
     try:
         response = await asyncio.to_thread(
             completion,
