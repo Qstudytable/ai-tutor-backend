@@ -1,188 +1,266 @@
 import streamlit as st
 import requests
 from datetime import datetime as dt
-import textwrap
 
-# --- GLOBAL LAYOUT CONFIGURATION ---
+# --- PAGE CONFIG ---
 st.set_page_config(
-    layout="wide", 
-    initial_sidebar_state="collapsed", 
-    page_title="AI Tutor"
+    page_title="Physics Tutor Pro",
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
+# CRITICAL CLOUD FIX: Use Docker-safe loopback address
 BACKEND_URL = "http://127.0.0.1:8000"
 
 # --- STATE MANAGEMENT ---
 if "session_id" not in st.session_state:
     st.session_state.session_id = None
-if "current_question_id" not in st.session_state:
-    st.session_state.current_question_id = "00899"
-if "problem_context" not in st.session_state:
-    st.session_state.problem_context = "A rectangular coil has $N = 100$ turns. Calculate the flux $\Phi$."
 if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+    st.session_state.chat_history = [
+        {"role": "Socrates", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
+    ]
 if "insights" not in st.session_state:
     st.session_state.insights = []
+if "status_text" not in st.session_state:
+    st.session_state.status_text = ""
 
-def init_session(q_id):
+# Auto-start session
+if st.session_state.get("session_id") is None:
     try:
-        res = requests.post(f"{BACKEND_URL}/session/start/{q_id}", timeout=5)
+        res = requests.post(f"{BACKEND_URL}/session/start/00899", timeout=3)
         if res.status_code == 200:
-            data = res.json()
-            st.session_state.session_id = data.get("session_id")
-            st.session_state.current_question_id = data.get("question_id")
-            if data.get("context"):
-                st.session_state.problem_context = data.get("context")
-            st.session_state.chat_history = [{"role": "assistant", "content": "Welcome. I'm ready to help you work through this physics problem. Where would you like to start?"}]
-            st.session_state.insights = []
+            st.session_state.session_id = res.json().get("session_id")
     except Exception:
-        # Fallback for UI testing if backend is down
         st.session_state.session_id = "sess_local_fallback"
-        if not st.session_state.chat_history:
-            st.session_state.chat_history = [{"role": "assistant", "content": "Welcome. I'm ready to help you work through this physics problem."}]
 
-if st.session_state.session_id is None:
-    init_session(st.session_state.current_question_id)
+# --- INJECT EXACT HTML/CSS TEMPLATE ---
+st.markdown("""
+    <style>
+        /* Import Fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Georgia&display=swap');
 
-def nav_prev():
-    try:
-        res = requests.get(f"{BACKEND_URL}/questions/navigate/{st.session_state.current_question_id}/prev", timeout=3)
-        if res.status_code == 200:
-            init_session(res.json().get("question_id"))
-    except Exception:
-        pass
+        /* Hide Default Streamlit Elements */
+        #MainMenu {visibility: hidden;}
+        header {visibility: hidden;}
+        footer {visibility: hidden;}
+        
+        /* Master Reset for Streamlit Container */
+        .stApp, [data-testid="stAppViewContainer"] {
+            background-color: #FFFFFF !important;
+        }
+        .block-container {
+            padding: 0 !important;
+            max-width: 100% !important;
+            overflow-x: hidden;
+        }
 
-def nav_next():
-    try:
-        res = requests.get(f"{BACKEND_URL}/questions/navigate/{st.session_state.current_question_id}/next", timeout=3)
-        if res.status_code == 200:
-            init_session(res.json().get("question_id"))
-    except Exception:
-        pass
+        /* --- VARIABLES --- */
+        :root {
+            --bg-main: #FFFFFF;
+            --bg-subtle: #F8FAFC;
+            --slate-900: #0F172A;
+            --slate-600: #475569;
+            --slate-400: #94A3B8;
+            --border-light: #E2E8F0;
+            --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-academic: 'Georgia', ui-serif, serif;
+        }
 
-# --- I. APPLE-ESQUE MINIMALIST CSS ---
-# We keep your beautiful typography and notebook styling, 
-# but let Streamlit handle the chat natively for stability.
-css_framework = textwrap.dedent("""
-<style>
-    html, body, [data-testid="stAppViewContainer"] {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        background-color: #FFFFFF;
-        color: #1D1D1F;
-    }
-    header, footer, #MainMenu { display: none !important; }
-    .block-container { padding: 3rem 5rem !important; max-width: 100% !important; }
+        /* --- HEADER --- */
+        .top-header {
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            padding: 0 40px; 
+            height: 56px;
+            border-bottom: 1px solid var(--border-light);
+            background-color: var(--bg-main);
+            font-family: var(--font-ui);
+        }
+        .top-header .logo { font-weight: 600; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--slate-900); }
+        .top-header .session-clock { font-weight: 500; font-size: 11px; color: var(--slate-600); letter-spacing: 1px; text-transform: uppercase; }
 
-    .sys-time { font-size: 0.85rem; font-weight: 500; color: #86868B; letter-spacing: 0.04em; }
-    .tag { font-size: 0.75rem; font-weight: 600; color: #86868B; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 12px; }
-    .title { font-size: 2.2rem; font-weight: 600; letter-spacing: -0.02em; color: #1D1D1F; margin-bottom: 24px; }
-    
-    .notebook-section { margin-top: 4rem; border-top: 1px solid #E5E5EA; padding-top: 3rem; }
-    .notebook-header { font-size: 0.85rem; font-weight: 600; color: #1D1D1F; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 1.5rem; }
-    .notebook-card { background-color: #FFFFFF; border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid #E5E5EA; transition: box-shadow 0.2s ease; animation: fade-in 0.4s ease-out;}
-    .notebook-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.04); }
-    .card-label { font-size: 0.75rem; font-weight: 600; color: #86868B; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.04em;}
-    .card-value { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 1.2rem; color: #1D1D1F; }
-    
-    @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* --- HACKING STREAMLIT COLUMNS TO MATCH 80/20 LAYOUT --- */
+        [data-testid="column"]:nth-of-type(1) {
+            padding: 48px 40px 0 40px !important;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        [data-testid="column"]:nth-of-type(2) {
+            border-left: 1px solid var(--border-light);
+            padding: 32px 24px !important;
+            background: var(--bg-main);
+            height: 100vh;
+        }
 
-    [data-testid="stButton"] button { border-radius: 24px; border: 1px solid #E5E5EA; background: #FFFFFF; color: #1D1D1F; font-weight: 500; padding: 0.5rem 1.5rem; transition: all 0.2s ease; }
-    [data-testid="stButton"] button:hover { background: #F5F5F7; border-color: #D2D2D7; color: #1D1D1F;}
-    
-    /* Clean up Streamlit's native chat inputs */
-    [data-testid="stChatInput"] { border: 1px solid #E5E5EA !important; border-radius: 24px !important; background: #F5F5F7 !important; padding: 0.5rem !important;}
-    [data-testid="stChatInput"]:focus-within { background: #FFFFFF !important; border-color: #0071E3 !important; box-shadow: 0 0 0 3px rgba(0,113,227,0.1) !important; }
-</style>
-""")
-st.markdown(css_framework, unsafe_allow_html=True)
+        /* --- LEFT COLUMN DOM --- */
+        .content-column { width: 100%; max-width: 760px; font-family: var(--font-ui); }
+        .breadcrumbs { font-size: 11px; font-weight: 600; color: var(--slate-400); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 24px; }
+        .problem-heading { font-size: 22px; font-weight: 500; letter-spacing: -0.5px; margin-bottom: 24px; color: var(--slate-900); }
+        .problem-text { font-family: var(--font-academic); font-size: 18px; line-height: 1.7; color: var(--slate-900); margin-bottom: 48px; }
+        
+        .concept-block { border-left: 2px solid var(--slate-900); padding-left: 24px; margin-bottom: 48px; }
+        .concept-block strong { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--slate-600); display: block; margin-bottom: 8px;}
+        .concept-block p { font-family: var(--font-academic); font-size: 16px; line-height: 1.6; color: var(--slate-900); margin: 0;}
 
-# --- II. HEADER & CONTROLS ---
+        /* Notebook */
+        .notebook-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px; }
+        .notebook-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--slate-900); }
+        .notebook-meta { font-size: 11px; color: var(--slate-400); }
+        .notebook-area { border: 1px solid var(--border-light); background-color: var(--bg-subtle); border-radius: 4px; display: flex; align-items: center; justify-content: center; min-height: 160px; margin-bottom: 48px; padding: 24px;}
+        .notebook-empty { font-family: var(--font-academic); font-style: italic; color: var(--slate-600); font-size: 15px; }
+
+        /* --- RIGHT COLUMN DOM --- */
+        .chat-feed { display: flex; flex-direction: column; gap: 32px; font-family: var(--font-ui); margin-bottom: 24px; }
+        .chat-mode-label { align-self: center; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--slate-400); margin-bottom: 8px; text-align: center;}
+        .msg-row { display: flex; flex-direction: column; }
+        .msg-label { font-size: 11px; font-weight: 600; color: var(--slate-900); margin-bottom: 6px; }
+        .msg-label.user { color: var(--slate-600); }
+        .msg-content { font-size: 14px; line-height: 1.6; color: var(--slate-900); }
+        .thinking { font-size: 13px; color: var(--slate-400); font-style: italic; }
+
+        /* Streamlit Input Override to match custom box */
+        [data-testid="stChatInput"] {
+            border: 1px solid var(--border-light) !important;
+            border-radius: 8px !important;
+            background: var(--bg-subtle) !important;
+        }
+        [data-testid="stChatInput"]:focus-within {
+            border-color: var(--slate-400) !important;
+            background: var(--bg-main) !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- TOP HEADER BAR ---
 now = dt.now()
-time_str = now.strftime("%A, %B %d | %I:%M %p").upper()
+date_string = now.strftime("%b %d ‧ %I:%M %p").upper()
+st.markdown(f"""
+    <div class="top-header">
+        <div class="logo">Physics Tutor</div>
+        <div class="session-clock">{date_string}</div>
+    </div>
+""", unsafe_allow_html=True)
 
-st.markdown(f'<div class="sys-time">{time_str}</div>', unsafe_allow_html=True)
-st.markdown('<div style="height: 1.5rem;"></div>', unsafe_allow_html=True)
+# --- 80/20 WORKSPACE LAYOUT ---
+col1, col2 = st.columns([4, 1.5], gap="small")
 
-h_col1, h_col2, h_col3 = st.columns([1, 10, 1])
-with h_col1:
-    st.button("← Prev", on_click=nav_prev, use_container_width=True)
-with h_col3:
-    st.button("Next →", on_click=nav_next, use_container_width=True)
-
-st.markdown('<div style="border-bottom: 1px solid #E5E5EA; margin-bottom: 3rem;"></div>', unsafe_allow_html=True)
-
-# --- III. MAIN WORKSPACE SPLIT ---
-left_col, right_col = st.columns([5.5, 4.5], gap="large")
-
-with left_col:
-    st.markdown('<div class="tag">Physics · Practice Module</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="title">Problem {st.session_state.current_question_id}</div>', unsafe_allow_html=True)
+# --- LEFT PANE (DEEP WORK) ---
+with col1:
     
-    # THE FIX: Letting Streamlit natively render the context ensures LaTeX works perfectly.
-    # We use a container to apply subtle styling without breaking KaTeX.
-    st.info(st.session_state.problem_context, icon="📖")
-    
-    st.markdown('<div class="notebook-section"><div class="notebook-header">Study Notebook</div>', unsafe_allow_html=True)
-    
+    # Render Notebook Contents
     if not st.session_state.insights:
-        st.markdown('<div style="color: #86868B; font-style: italic; font-size: 0.95rem;">No insights recorded yet. Talk to the tutor to begin unlocking steps.</div></div>', unsafe_allow_html=True)
+        notebook_html = '<div class="notebook-area"><span class="notebook-empty">Awaiting formulas and insights from chat...</span></div>'
     else:
+        notebook_html = '<div class="notebook-area" style="flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 16px;">'
         for insight in st.session_state.insights:
-            st.markdown(f"""
-            <div class="notebook-card">
-                <div class="card-label">{insight.get('theorem', 'Physics Principle')}</div>
-                <div class="card-value">{insight.get('formula', '')}</div>
-                <div style="font-size: 0.85rem; color: #86868B; margin-top: 10px;">Final Value: {insight.get('result', 'N/A')}</div>
+            notebook_html += f"""
+            <div style="border-bottom: 1px solid var(--border-light); padding-bottom: 12px;">
+                <strong style="font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--slate-600); display: block; margin-bottom: 4px;">{insight.get('theorem')}</strong>
+                <div style="font-family: monospace; font-size: 16px; color: var(--slate-900); margin-bottom: 4px;">{insight.get('formula')}</div>
+                <div style="font-size: 12px; color: var(--slate-400);">Value: {insight.get('result', 'N/A')}</div>
             </div>
-            """, unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+            """
+        notebook_html += '</div>'
 
-with right_col:
-    # THE FIX: Native scrolling container. No JS required, smooth as butter.
-    chat_container = st.container(height=600, border=False)
+    # Inject Entire Left DOM
+    st.markdown(f"""
+        <div class="content-column">
+            <div class="breadcrumbs">Class 12 ‧ Electromagnetic Induction</div>
+            <div class="problem-heading">Problem 00899</div>
+            
+            <div class="problem-text">
+                A rectangular coil has <i>N = 100</i> turns, with side lengths <i>ab = 30cm</i> and <i>ad = 20cm</i>. 
+                It is placed in a uniform magnetic field with a magnetic induction strength of <i>B = 0.8T</i>. 
+                The coil rotates uniformly about the axis O' starting from the position shown in the diagram, 
+                with an angular velocity of <i>&omega; = 100&pi;</i> rad/s.
+            </div>
+            
+            <div class="concept-block">
+                <strong>Active Concept</strong>
+                <p>Apply Faraday's law of electromagnetic induction to find the maximum induced electromotive force in a rotating coil.</p>
+            </div>
+
+            <div class="notebook-header">
+                <span class="notebook-title">Study Notebook</span>
+                <span class="notebook-meta">{len(st.session_state.insights)} Insights Recorded</span>
+            </div>
+            
+            {notebook_html}
+        </div>
+    """, unsafe_allow_html=True)
+
+# --- RIGHT PANE (CHAT UTILITY) ---
+with col2:
     
-    # Render existing chat history
+    # Generate Chat Feed DOM
+    chat_html = '<div class="chat-feed"><div class="chat-mode-label">Socratic Mode</div>'
+    
     for msg in st.session_state.chat_history:
-        role = "user" if msg["role"] == "You" else "assistant"
-        with chat_container.chat_message(role):
-            # Streamlit automatically parses LaTeX here too!
-            st.markdown(msg["content"])
+        role = msg["role"]
+        is_user = role == "You"
+        label_class = "msg-label user" if is_user else "msg-label"
+        display_name = "You" if is_user else "Socrates"
+        content = msg["content"]
+        
+        chat_html += f"""
+        <div class="msg-row">
+            <div class="{label_class}">{display_name}</div>
+            <div class="msg-content">{content}</div>
+        </div>
+        """
+        
+    if st.session_state.status_text:
+        chat_html += f"""
+        <div class="msg-row">
+            <div class="thinking">{st.session_state.status_text}</div>
+        </div>
+        """
+        
+    chat_html += '</div>'
+    
+    # Inject Chat DOM
+    st.markdown(chat_html, unsafe_allow_html=True)
 
-    # Chat Input & Backend Processing
-    user_input = st.chat_input("Message Tutor...")
+    # Input Box at bottom of column
+    user_input = st.chat_input("Type logic or formula...")
     
     if user_input:
-        # 1. Immediately display user message
         st.session_state.chat_history.append({"role": "You", "content": user_input})
-        with chat_container.chat_message("user"):
-            st.markdown(user_input)
-            
-        # 2. Process AI Response with a native spinner
-        with chat_container.chat_message("assistant"):
-            with st.spinner("Analyzing..."):
-                try:
-                    response = requests.post(
-                        f"{BACKEND_URL}/chat/{st.session_state.session_id}",
-                        json={"user_text": user_input},
-                        timeout=15
-                    )
-                    if response.status_code == 200:
-                        data = response.json()
-                        ai_response = data.get("ai_response", "")
-                        
-                        # Show and save response
-                        st.markdown(ai_response)
-                        st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
-                        
-                        # Process notebook updates
-                        nb_updates = data.get("notebook_updates", {})
-                        if nb_updates and nb_updates.get("official_solution"):
-                            st.session_state.insights.append(nb_updates["official_solution"])
-                            # Rerun ONLY if notebook updates to refresh the left column
-                            st.rerun() 
-                    else:
-                        st.error("System error: Feedback loop disrupted.")
-                except Exception:
-                    error_msg = "API synchronization in progress. Please hold."
-                    st.markdown(error_msg)
-                    st.session_state.chat_history.append({"role": "assistant", "content": error_msg})
+        st.session_state.status_text = "Analyzing physics principles..."
+        st.rerun()
+
+# --- BACKEND PROCESSOR (Runs if status indicates loading) ---
+if st.session_state.status_text == "Analyzing physics principles...":
+    last_user_message = st.session_state.chat_history[-1]["content"]
+     
+    try:
+        response = requests.post(
+            f"{BACKEND_URL}/chat/{st.session_state.session_id}",
+            json={"user_text": last_user_message},
+            timeout=15
+        )
+        if response.status_code == 200:
+            data = response.json()
+            st.session_state.chat_history.append({
+                "role": "Socrates",
+                "content": data.get("ai_response")
+            })
+            nb_updates = data.get("notebook_updates", {})
+            if nb_updates and nb_updates.get("official_solution"):
+                st.session_state.insights.append(nb_updates["official_solution"])
+        else:
+            st.session_state.chat_history.append({
+                "role": "Socrates",
+                "content": "I apologize, but I've encountered an issue evaluating the equations. Let's try to look at this step again."
+            })
+    except Exception:
+        st.session_state.chat_history.append({
+            "role": "Socrates",
+            "content": "The logic engine is starting up. Please give me a second and try again!"
+        })
+       
+    st.session_state.status_text = ""
+    st.rerun()
