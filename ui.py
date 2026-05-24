@@ -1,196 +1,18 @@
 import streamlit as st
 import requests
-import datetime
 from datetime import datetime as dt
 
-# Set page config for wide layout and clean default elements
+# --- PAGE CONFIG ---
 st.set_page_config(
-    page_title="Physics Tutor",
-    page_icon="🎓",
+    page_title="Physics Tutor Pro",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS for high-fidelity matching of colors, typography, and layout spacing
-st.markdown("""
-  <style>
-    /* Global styles */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;1,400&display=swap');
-     
-    html, body, [data-testid="stAppViewContainer"] {
-      background-color: #FFFFFF;
-      font-family: 'Inter', -apple-system, sans-serif;
-      color: #0F172A;
-    }
-     
-    /* Remove default Streamlit top decoration and padding */
-    [data-testid="stHeader"] {
-      display: none;
-    }
-    .block-container {
-      padding-top: 1.5rem !important;
-      padding-bottom: 1.5rem !important;
-      padding-left: 3rem !important;
-      padding-right: 3rem !important;
-    }
-     
-    /* Header styling */
-    .header-container {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid #E2E8F0;
-      padding-bottom: 1rem;
-      margin-bottom: 2rem;
-    }
-    .header-title {
-      font-family: 'Inter', sans-serif;
-      font-weight: 700;
-      font-size: 0.9rem;
-      letter-spacing: 0.15em;
-      color: #0F172A;
-    }
-    .header-date {
-      font-family: 'Inter', sans-serif;
-      font-size: 0.75rem;
-      color: #64748B;
-      letter-spacing: 0.05em;
-    }
-     
-    /* Breadcrumb */
-    .breadcrumb {
-      font-family: 'Inter', sans-serif;
-      font-size: 0.7rem;
-      font-weight: 600;
-      color: #94A3B8;
-      letter-spacing: 0.1em;
-      margin-bottom: 0.5rem;
-      text-transform: uppercase;
-    }
-     
-    /* Problem Title */
-    .problem-title {
-      font-family: 'Lora', Georgia, serif;
-      font-size: 1.85rem;
-      font-weight: 500;
-      color: #0F172A;
-      margin-bottom: 1.2rem;
-    }
-     
-    /* Problem Description */
-    .problem-desc {
-      font-family: 'Lora', Georgia, serif;
-      font-size: 1.1rem;
-      line-height: 1.7;
-      color: #334155;
-      margin-bottom: 2rem;
-    }
-     
-    /* Active Concept Box */
-    .active-concept-box {
-      border-left: 3px solid #0F172A;
-      padding-left: 1.25rem;
-      margin-top: 1.5rem;
-      margin-bottom: 2.5rem;
-    }
-    .active-concept-label {
-      font-family: 'Inter', sans-serif;
-      font-size: 0.7rem;
-      font-weight: 700;
-      color: #64748B;
-      letter-spacing: 0.08em;
-      margin-bottom: 0.4rem;
-      text-transform: uppercase;
-    }
-    .active-concept-text {
-      font-family: 'Lora', Georgia, serif;
-      font-size: 1.05rem;
-      color: #1E293B;
-      line-height: 1.5;
-    }
-     
-    /* Study Notebook */
-    .notebook-label-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 0.75rem;
-    }
-    .notebook-title {
-      font-family: 'Inter', sans-serif;
-      font-size: 0.75rem;
-      font-weight: 700;
-      color: #475569;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-    .notebook-counter {
-      font-family: 'Inter', sans-serif;
-      font-size: 0.7rem;
-      color: #94A3B8;
-    }
-    .notebook-container {
-      border: 1px solid #E2E8F0;
-      background-color: #FAFAFA;
-      border-radius: 6px;
-      min-height: 250px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 1.5rem;
-    }
-    .notebook-placeholder {
-      font-family: 'Lora', Georgia, serif;
-      font-style: italic;
-      font-size: 0.95rem;
-      color: #64748B;
-      text-align: center;
-    }
-     
-    /* Sidebar layout and headers */
-    .sidebar-header {
-      font-family: 'Inter', sans-serif;
-      font-size: 0.75rem;
-      font-weight: 700;
-      color: #94A3B8;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      text-align: right;
-      margin-bottom: 2rem;
-      border-bottom: 1px solid #F1F5F9;
-      padding-bottom: 0.5rem;
-    }
-     
-    /* Chat bubble styles */
-    .chat-role-label {
-      font-family: 'Inter', sans-serif;
-      font-size: 0.75rem;
-      font-weight: 700;
-      color: #0F172A;
-      margin-top: 1.25rem;
-      margin-bottom: 0.25rem;
-    }
-    .chat-text {
-      font-family: 'Inter', sans-serif;
-      font-size: 0.9rem;
-      line-height: 1.5;
-      color: #334155;
-      margin-bottom: 1.25rem;
-    }
-    .status-indicator {
-      font-family: 'Inter', sans-serif;
-      font-size: 0.85rem;
-      font-style: italic;
-      color: #94A3B8;
-      margin-top: 1rem;
-    }
-  </style>
-""", unsafe_allow_html=True)
-
 # CRITICAL CLOUD FIX: Use Docker-safe loopback address
 BACKEND_URL = "http://127.0.0.1:8000"
 
-# --- State Management Initialization ---
+# --- STATE MANAGEMENT ---
 if "session_id" not in st.session_state:
     st.session_state.session_id = None
 if "chat_history" not in st.session_state:
@@ -202,124 +24,218 @@ if "insights" not in st.session_state:
 if "status_text" not in st.session_state:
     st.session_state.status_text = ""
 
-# Automatically trigger session start on application launch
+# Auto-start session
 if st.session_state.get("session_id") is None:
     try:
-        # Requesting mock session creation matching Problem 00899
         res = requests.post(f"{BACKEND_URL}/session/start/00899", timeout=3)
         if res.status_code == 200:
             st.session_state.session_id = res.json().get("session_id")
     except Exception:
-        # Safe fallback for standalone UI development
         st.session_state.session_id = "sess_local_fallback"
 
-# --- Top Navigation/Header Layer ---
-now = dt.now()
-date_string = now.strftime("%b %d · %I:%M %p").upper()
+# --- INJECT EXACT HTML/CSS TEMPLATE ---
+st.markdown("""
+    <style>
+        /* Import Fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Georgia&display=swap');
 
-st.markdown(f"""
-  <div class="header-container">
-    <div class="header-title">PHYSICS TUTOR</div>
-    <div class="header-date">{date_string}</div>
-  </div>
+        /* Hide Default Streamlit Elements */
+        #MainMenu {visibility: hidden;}
+        header {visibility: hidden;}
+        footer {visibility: hidden;}
+        
+        /* Master Reset for Streamlit Container */
+        .stApp, [data-testid="stAppViewContainer"] {
+            background-color: #FFFFFF !important;
+        }
+        .block-container {
+            padding: 0 !important;
+            max-width: 100% !important;
+            overflow-x: hidden;
+        }
+
+        /* --- VARIABLES --- */
+        :root {
+            --bg-main: #FFFFFF;
+            --bg-subtle: #F8FAFC;
+            --slate-900: #0F172A;
+            --slate-600: #475569;
+            --slate-400: #94A3B8;
+            --border-light: #E2E8F0;
+            --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-academic: 'Georgia', ui-serif, serif;
+        }
+
+        /* --- HEADER --- */
+        .top-header {
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            padding: 0 40px; 
+            height: 56px;
+            border-bottom: 1px solid var(--border-light);
+            background-color: var(--bg-main);
+            font-family: var(--font-ui);
+        }
+        .top-header .logo { font-weight: 600; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--slate-900); }
+        .top-header .session-clock { font-weight: 500; font-size: 11px; color: var(--slate-600); letter-spacing: 1px; text-transform: uppercase; }
+
+        /* --- HACKING STREAMLIT COLUMNS TO MATCH 80/20 LAYOUT --- */
+        [data-testid="column"]:nth-of-type(1) {
+            padding: 48px 40px 0 40px !important;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        [data-testid="column"]:nth-of-type(2) {
+            border-left: 1px solid var(--border-light);
+            padding: 32px 24px !important;
+            background: var(--bg-main);
+            height: 100vh;
+        }
+
+        /* --- LEFT COLUMN DOM --- */
+        .content-column { width: 100%; max-width: 760px; font-family: var(--font-ui); }
+        .breadcrumbs { font-size: 11px; font-weight: 600; color: var(--slate-400); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 24px; }
+        .problem-heading { font-size: 22px; font-weight: 500; letter-spacing: -0.5px; margin-bottom: 24px; color: var(--slate-900); }
+        .problem-text { font-family: var(--font-academic); font-size: 18px; line-height: 1.7; color: var(--slate-900); margin-bottom: 48px; }
+        
+        .concept-block { border-left: 2px solid var(--slate-900); padding-left: 24px; margin-bottom: 48px; }
+        .concept-block strong { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--slate-600); display: block; margin-bottom: 8px;}
+        .concept-block p { font-family: var(--font-academic); font-size: 16px; line-height: 1.6; color: var(--slate-900); margin: 0;}
+
+        /* Notebook */
+        .notebook-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px; }
+        .notebook-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--slate-900); }
+        .notebook-meta { font-size: 11px; color: var(--slate-400); }
+        .notebook-area { border: 1px solid var(--border-light); background-color: var(--bg-subtle); border-radius: 4px; display: flex; align-items: center; justify-content: center; min-height: 160px; margin-bottom: 48px; padding: 24px;}
+        .notebook-empty { font-family: var(--font-academic); font-style: italic; color: var(--slate-600); font-size: 15px; }
+
+        /* --- RIGHT COLUMN DOM --- */
+        .chat-feed { display: flex; flex-direction: column; gap: 32px; font-family: var(--font-ui); margin-bottom: 24px; }
+        .chat-mode-label { align-self: center; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--slate-400); margin-bottom: 8px; text-align: center;}
+        .msg-row { display: flex; flex-direction: column; }
+        .msg-label { font-size: 11px; font-weight: 600; color: var(--slate-900); margin-bottom: 6px; }
+        .msg-label.user { color: var(--slate-600); }
+        .msg-content { font-size: 14px; line-height: 1.6; color: var(--slate-900); }
+        .thinking { font-size: 13px; color: var(--slate-400); font-style: italic; }
+
+        /* Streamlit Input Override to match custom box */
+        [data-testid="stChatInput"] {
+            border: 1px solid var(--border-light) !important;
+            border-radius: 8px !important;
+            background: var(--bg-subtle) !important;
+        }
+        [data-testid="stChatInput"]:focus-within {
+            border-color: var(--slate-400) !important;
+            background: var(--bg-main) !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
+        }
+    </style>
 """, unsafe_allow_html=True)
 
-# --- Layout Grid: Main Workspace (col1) vs Socratic Companion Panel (col2) ---
-col1, col2 = st.columns([13, 7])
+# --- TOP HEADER BAR ---
+now = dt.now()
+date_string = now.strftime("%b %d ‧ %I:%M %p").upper()
+st.markdown(f"""
+    <div class="top-header">
+        <div class="logo">Physics Tutor</div>
+        <div class="session-clock">{date_string}</div>
+    </div>
+""", unsafe_allow_html=True)
 
+# --- 80/20 WORKSPACE LAYOUT ---
+col1, col2 = st.columns([4, 1.5], gap="small")
+
+# --- LEFT PANE (DEEP WORK) ---
 with col1:
-    # 1. Breadcrumbs
-    st.markdown('<div class="breadcrumb">Class 12 · Electromagnetic Induction</div>', unsafe_allow_html=True)
-     
-    # 2. Problem Title
-    st.markdown('<div class="problem-title">Problem 00899</div>', unsafe_allow_html=True)
-     
-    # 3. Problem Description with proper LaTeX parsing
-    st.markdown("""
-      <div class="problem-desc">
-        A rectangular coil has $N = 100$ turns, with side lengths $ab = 30cm$ and $ad = 20cm$. 
-        It is placed in a uniform magnetic field with a magnetic induction strength of $B = 0.8T$. 
-        The coil rotates uniformly about the axis O' starting from the position shown in the diagram, 
-        with an angular velocity of $\\omega = 100\\pi$ rad/s.
-      </div>
-    """, unsafe_allow_html=True)
-     
-    # 4. Active Concept blockquote
-    st.markdown("""
-      <div class="active-concept-box">
-        <div class="active-concept-label">Active Concept</div>
-        <div class="active-concept-text">
-          Apply Faraday's law of electromagnetic induction to find the maximum induced electromotive force in a rotating coil.
-        </div>
-      </div>
-    """, unsafe_allow_html=True)
-     
-    # 5. Study Notebook Component
-    st.markdown(f"""
-      <div class="notebook-label-row">
-        <div class="notebook-title">Study Notebook</div>
-        <div class="notebook-counter">{len(st.session_state.insights)} Insights Recorded</div>
-      </div>
-    """, unsafe_allow_html=True)
-     
+    
+    # Render Notebook Contents
     if not st.session_state.insights:
-        st.markdown("""
-          <div class="notebook-container">
-            <div class="notebook-placeholder">Awaiting formulas and insights from chat...</div>
-          </div>
-        """, unsafe_allow_html=True)
+        notebook_html = '<div class="notebook-area"><span class="notebook-empty">Awaiting formulas and insights from chat...</span></div>'
     else:
-        # Dynamic rendering container for verified logic steps
-        insight_box_html = '<div class="notebook-container" style="display: block; align-items: flex-start;">'
+        notebook_html = '<div class="notebook-area" style="flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 16px;">'
         for insight in st.session_state.insights:
-            insight_box_html += f"""
-              <div style="border-bottom: 1px solid #F1F5F9; padding-bottom: 0.75rem; margin-bottom: 0.75rem;">
-                <span style="font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: #475569;">
-                  {insight.get('theorem')}
-                </span><br/>
-                <code style="font-family: monospace; font-size: 1rem; color: #0F172A;">{insight.get('formula')}</code>
-                <span style="float: right; font-size: 0.85rem; color: #64748B;">Val: {insight.get('result')}</span>
-              </div>
+            notebook_html += f"""
+            <div style="border-bottom: 1px solid var(--border-light); padding-bottom: 12px;">
+                <strong style="font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--slate-600); display: block; margin-bottom: 4px;">{insight.get('theorem')}</strong>
+                <div style="font-family: monospace; font-size: 16px; color: var(--slate-900); margin-bottom: 4px;">{insight.get('formula')}</div>
+                <div style="font-size: 12px; color: var(--slate-400);">Value: {insight.get('result', 'N/A')}</div>
+            </div>
             """
-        insight_box_html += "</div>"
-        st.markdown(insight_box_html, unsafe_allow_html=True)
+        notebook_html += '</div>'
 
+    # Inject Entire Left DOM
+    st.markdown(f"""
+        <div class="content-column">
+            <div class="breadcrumbs">Class 12 ‧ Electromagnetic Induction</div>
+            <div class="problem-heading">Problem 00899</div>
+            
+            <div class="problem-text">
+                A rectangular coil has <i>N = 100</i> turns, with side lengths <i>ab = 30cm</i> and <i>ad = 20cm</i>. 
+                It is placed in a uniform magnetic field with a magnetic induction strength of <i>B = 0.8T</i>. 
+                The coil rotates uniformly about the axis O' starting from the position shown in the diagram, 
+                with an angular velocity of <i>&omega; = 100&pi;</i> rad/s.
+            </div>
+            
+            <div class="concept-block">
+                <strong>Active Concept</strong>
+                <p>Apply Faraday's law of electromagnetic induction to find the maximum induced electromotive force in a rotating coil.</p>
+            </div>
+
+            <div class="notebook-header">
+                <span class="notebook-title">Study Notebook</span>
+                <span class="notebook-meta">{len(st.session_state.insights)} Insights Recorded</span>
+            </div>
+            
+            {notebook_html}
+        </div>
+    """, unsafe_allow_html=True)
+
+# --- RIGHT PANE (CHAT UTILITY) ---
 with col2:
-    # Right Column - Socratic companion interface panel
-    st.markdown('<div class="sidebar-header">Socratic Mode</div>', unsafe_allow_html=True)
-     
-    # Scrollable space layout
-    chat_container = st.container()
-     
-    with chat_container:
-        for chat_node in st.session_state.chat_history:
-            st.markdown(f'<div class="chat-role-label">{chat_node["role"]}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="chat-text">{chat_node["content"]}</div>', unsafe_allow_html=True)
-         
-        if st.session_state.status_text:
-            st.markdown(f'<div class="status-indicator">{st.session_state.status_text}</div>', unsafe_allow_html=True)
+    
+    # Generate Chat Feed DOM
+    chat_html = '<div class="chat-feed"><div class="chat-mode-label">Socratic Mode</div>'
+    
+    for msg in st.session_state.chat_history:
+        role = msg["role"]
+        is_user = role == "You"
+        label_class = "msg-label user" if is_user else "msg-label"
+        display_name = "You" if is_user else "Socrates"
+        content = msg["content"]
+        
+        chat_html += f"""
+        <div class="msg-row">
+            <div class="{label_class}">{display_name}</div>
+            <div class="msg-content">{content}</div>
+        </div>
+        """
+        
+    if st.session_state.status_text:
+        chat_html += f"""
+        <div class="msg-row">
+            <div class="thinking">{st.session_state.status_text}</div>
+        </div>
+        """
+        
+    chat_html += '</div>'
+    
+    # Inject Chat DOM
+    st.markdown(chat_html, unsafe_allow_html=True)
 
-    # Input controller bar
-    with st.form("chat_form", clear_on_submit=True):
-        st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
-        user_input = st.text_input(
-            label="Hidden Form Label",
-            placeholder="Type logic or formula...",
-            label_visibility="collapsed"
-        )
-        submit_button = st.form_submit_button("SEND")
-       
-    if submit_button and user_input.strip() != "":
-        # Append User input and trigger status loading state
+    # Input Box at bottom of column
+    user_input = st.chat_input("Type logic or formula...")
+    
+    if user_input:
         st.session_state.chat_history.append({"role": "You", "content": user_input})
         st.session_state.status_text = "Analyzing physics principles..."
         st.rerun()
 
-# Processing step for active AI tutor callbacks
+# --- BACKEND PROCESSOR (Runs if status indicates loading) ---
 if st.session_state.status_text == "Analyzing physics principles...":
     last_user_message = st.session_state.chat_history[-1]["content"]
      
-    # Send values over to Engine endpoint
     try:
         response = requests.post(
             f"{BACKEND_URL}/chat/{st.session_state.session_id}",
@@ -332,7 +248,6 @@ if st.session_state.status_text == "Analyzing physics principles...":
                 "role": "Socrates",
                 "content": data.get("ai_response")
             })
-            # Save math concepts inside user's dynamic workspace
             nb_updates = data.get("notebook_updates", {})
             if nb_updates and nb_updates.get("official_solution"):
                 st.session_state.insights.append(nb_updates["official_solution"])
@@ -342,12 +257,10 @@ if st.session_state.status_text == "Analyzing physics principles...":
                 "content": "I apologize, but I've encountered an issue evaluating the equations. Let's try to look at this step again."
             })
     except Exception:
-        # Failsafe if the API takes too long to wake up
         st.session_state.chat_history.append({
             "role": "Socrates",
             "content": "The logic engine is starting up. Please give me a second and try again!"
         })
        
-    # Clear loading indicator status
     st.session_state.status_text = ""
     st.rerun()
