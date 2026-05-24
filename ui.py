@@ -8,7 +8,7 @@ import textwrap
 st.set_page_config(
     layout="wide", 
     initial_sidebar_state="collapsed", 
-    page_title="STUDYtable"
+    page_title="Physics Tutor"
 )
 
 # SINGLE-CONTAINER ROUTING:
@@ -29,11 +29,11 @@ if "insights" not in st.session_state:
 if "question_context" not in st.session_state:
     st.session_state.question_context = ""
 if "tutoring_mode" not in st.session_state:
-    st.session_state.tutoring_mode = "Active — Socratic Mode"
+    st.session_state.tutoring_mode = "Socratic Mode"
 
 
 def sync_session_snapshot(session_id: str):
-    """Syncs session state. Fails loudly if backend is unreachable."""
+    """Syncs session state dynamically from backend."""
     try:
         base_url = BACKEND_URL.rstrip("/")
         res = requests.get(f"{base_url}/session/{session_id}", timeout=5)
@@ -42,7 +42,7 @@ def sync_session_snapshot(session_id: str):
             st.session_state.chat_history = data.get("chat_history") or []
             st.session_state.insights = data.get("notebook_history") or []
             mode = data.get("tutoring_mode", "socratic")
-            st.session_state.tutoring_mode = "Active — Socratic Mode" if mode == "socratic" else "Active — Direct Mode"
+            st.session_state.tutoring_mode = "Socratic Mode" if mode == "socratic" else "Direct Mode"
         else:
             st.error(f"Failed to synchronize workspace state. Server returned code {res.status_code}.")
             st.stop()
@@ -52,10 +52,7 @@ def sync_session_snapshot(session_id: str):
 
 
 def init_session(q_id: str):
-    """
-    Initializes session on Port 8000.
-    10-retry grace window (30 seconds total) handles GCP container cache builds silently.
-    """
+    """Initializes session on Port 8000. Automatically handles backend warmups."""
     base_url = BACKEND_URL.rstrip("/")
     url = f"{base_url}/session/start/{q_id.strip()}"
     
@@ -72,20 +69,18 @@ def init_session(q_id: str):
                     {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
                 ]
                 st.session_state.insights = []
-                st.session_state.tutoring_mode = "Active — Socratic Mode"
+                st.session_state.tutoring_mode = "Socratic Mode"
                 return  # Connection successful, exit function
             else:
                 st.error(f"Internal initialization failed (Status {res.status_code}).")
                 st.stop()
         except requests.exceptions.ConnectionError:
-            # Silence warning banners during the first 3 startup attempts for a premium look
             if attempt < max_retries - 1:
                 if attempt >= 3:
                     st.warning(f"Connecting to physics tutor engine... (Attempt {attempt + 1}/{max_retries})")
                 time.sleep(3)
             else:
                 st.error("Error: Could not spin up the physics tutor state engine on GCP.")
-                st.info("The server is online, but the database backend failed to wake up in time. Please reload.")
                 st.stop()
         except Exception as e:
             st.error(f"Internal API handshake failed: {e}")
@@ -131,45 +126,48 @@ st.markdown(textwrap.dedent("""
 
   /* Premium Top Navigation Bar Container */
   .top-bar-container {
-    border-bottom: 1px solid #E5E5EA;
-    padding-bottom: 0.8rem;
+    border-bottom: 1px solid #1D1D1F;
+    padding-bottom: 1rem;
     margin-bottom: 2rem;
-    padding-left: 10%;
-    padding-right: 20%;
+    padding-left: 7%;
+    padding-right: 7%;
   }
 
   .top-bar-title {
-    font-size: 0.72rem;
+    font-size: 0.85rem;
     font-weight: 700;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     color: #1D1D1F;
-    margin-top: 6px;
+    margin-top: 10px;
   }
 
+  /* Flex center top navigation alignment */
   .top-bar-center {
     display: flex;
     justify-content: center;
     align-items: center;
     gap: 1.5rem;
+    margin-top: 8px;
   }
 
   .problem-indicator {
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: -apple-system, sans-serif;
     font-size: 0.85rem;
-    font-weight: 500;
-    border-bottom: 1px solid #1D1D1F;
+    font-weight: 600;
+    border-bottom: 2px solid #1D1D1F;
     color: #1D1D1F;
-    padding-bottom: 2px;
+    padding-bottom: 4px;
+    letter-spacing: 0.02em;
   }
 
   .top-bar-right-links {
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 600;
-    color: #86868B;
+    color: #1D1D1F;
     letter-spacing: 0.08em;
     text-align: right;
-    margin-top: 6px;
+    margin-top: 10px;
     display: flex;
     justify-content: flex-end;
     gap: 1.5rem;
@@ -177,7 +175,7 @@ st.markdown(textwrap.dedent("""
 
   /* Left Panel Workspace Typography and Tags */
   .tag { 
-    font-size: 0.64rem; 
+    font-size: 0.68rem; 
     font-weight: 600; 
     color: #86868B; 
     letter-spacing: 0.08em; 
@@ -192,7 +190,7 @@ st.markdown(textwrap.dedent("""
     margin-bottom: 1.5rem; 
   }
   
-  /* CRITICAL FIX: Forces markdown text to style as Georgia serif, preserving LaTeX math parsing */
+  /* Forces markdown text to style as Georgia serif, preserving LaTeX math parsing */
   .stMarkdown p {
     font-family: Georgia, "Times New Roman", Times, serif !important;
     font-size: 1.15rem !important;
@@ -215,10 +213,10 @@ st.markdown(textwrap.dedent("""
     margin-bottom: 0.4rem;
   }
   .active-concept-desc {
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    font-size: 0.95rem;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1rem;
     line-height: 1.6;
-    color: #515154;
+    color: #1D1D1F;
   }
 
   /* Study Notebook Elements */
@@ -238,12 +236,8 @@ st.markdown(textwrap.dedent("""
     text-transform: uppercase;
     color: #1D1D1F;
   }
-  .notebook-count {
-    font-size: 0.68rem;
-    color: #86868B;
-  }
   .notebook-container {
-    border: 1px solid #F0F0F2;
+    border: 1px solid #E5E5EA;
     border-radius: 4px;
     padding: 3rem 1.5rem;
     background-color: #F9F9FB;
@@ -270,19 +264,17 @@ st.markdown(textwrap.dedent("""
   /* Minimalist Chat panel divider logic on the right-hand column */
   .right-chat-panel {
     border-left: 1px solid #E5E5EA;
-    padding-left: 1.8rem;
+    padding-left: 2rem;
     min-height: 75vh;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
   }
   
   .chat-mode-header {
     text-align: left;
-    font-size: 0.8rem;
+    font-size: 0.82rem;
     font-weight: 700;
     color: #1D1D1F;
     margin-bottom: 0.2rem;
+    letter-spacing: 0.04em;
   }
   
   .chat-mode-subheader {
@@ -293,33 +285,60 @@ st.markdown(textwrap.dedent("""
     margin-bottom: 2rem;
   }
 
-  /* Unbubbled typography chat wrapper */
-  .msg-wrapper {
-    margin-bottom: 1.8rem;
+  /* Socrates Light Gray Message Bubble (Image 2 style) */
+  .msg-socrates-card {
+    background-color: #F5F5F7;
+    border-radius: 8px;
+    padding: 15px 20px;
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: #1D1D1F;
+    max-width: 90%;
   }
-  .msg-sender {
-    font-size: 0.7rem;
+
+  /* You Solid Black Message Bubble (Image 2 style) */
+  .msg-you-card {
+    background-color: #000000;
+    color: #FFFFFF !important;
+    border-radius: 8px;
+    padding: 15px 20px;
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    max-width: 90%;
+    margin-left: auto; /* Right-aligns the block perfectly */
+    text-align: left;
+  }
+
+  .msg-sender-label-socrates {
+    font-size: 0.68rem;
     font-weight: 700;
     color: #86868B;
     margin-bottom: 0.4rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
-  .msg-content {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-    font-size: 0.95rem;
-    line-height: 1.6;
-    color: #1D1D1F;
+
+  .msg-sender-label-you {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #86868B;
+    margin-bottom: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    text-align: right;
   }
+
   .status-indicator {
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: -apple-system, sans-serif;
     font-style: italic;
     color: #86868B;
     font-size: 0.85rem;
-    margin-top: 1rem;
+    margin-top: 1.5rem;
   }
 
-  /* Override Streamlit Chat layout elements to strip bubbles */
+  /* Completely strip Streamlit's default bubble and container designs */
   div[data-testid="stChatMessage"] {
     background-color: transparent !important;
     border: none !important;
@@ -328,7 +347,7 @@ st.markdown(textwrap.dedent("""
     margin-bottom: 1.5rem !important;
   }
 
-  /* Flat, un-bordered navigation button styling */
+  /* Clean up Streamlit native buttons to act as flat text links */
   div.stButton > button {
     border: none !important;
     background-color: transparent !important;
@@ -338,13 +357,22 @@ st.markdown(textwrap.dedent("""
     font-weight: 500 !important;
     padding: 0px !important;
     transition: color 0.2s ease;
+    line-height: 1 !important;
+    height: auto !important;
   }
   div.stButton > button:hover {
     color: #1D1D1F !important;
     background-color: transparent !important;
   }
   
-  /* Clean editorial input overrides with bottom border layout */
+  /* Horizontal line divider on the right column */
+  .chat-header-divider {
+    border-bottom: 1px solid #E5E5EA;
+    margin-bottom: 2rem;
+    margin-top: 0.5rem;
+  }
+
+  /* Premium borderless input matching Image 2 */
   [data-testid="stChatInput"] {
     border: none !important;
     border-bottom: 1px solid #1D1D1F !important;
@@ -356,7 +384,7 @@ st.markdown(textwrap.dedent("""
 """), unsafe_allow_html=True)
 
 
-# --- IV. NATIVE EDITORIAL HEADER WITH WORKSPACE NAVIGATION ---
+# --- VI. PIXEL-PERFECT NATIVE HEADER ---
 st.markdown('<div class="top-bar-container">', unsafe_allow_html=True)
 h_col_left, h_col_center, h_col_right = st.columns([2, 5, 2])
 
@@ -380,7 +408,7 @@ with h_col_right:
 st.markdown('</div>', unsafe_allow_html=True)
 
 
-# --- V. EXACT HORIZONTAL GRID LAYOUT (10% | 60% | 10% | 20%) ---
+# --- VII. THE 10% / 60% / 10% / 20% GRID ---
 col_space1, col_workspace, col_space2, col_chat = st.columns([0.10, 0.60, 0.10, 0.20])
 
 
@@ -392,13 +420,13 @@ with col_space1:
 
 
 # ==========================================
-# COLUMN 2: WORKSPACE CONTAINER (60%)
+# COLUMN 2: WORKSPACE SHEET (60%)
 # ==========================================
 with col_workspace:
     st.markdown('<div class="tag">Physics / Class 12 / Electromagnetic Induction</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="title">Problem {st.session_state.current_question_id}</div>', unsafe_allow_html=True)
     
-    # PROBLEM SHEET: Rendered natively to keep KaTeX engine parsing LaTeX math beautifully
+    # PROBLEM SHEET: Native Markdown forces perfect mathematical equation parsing
     st.markdown(st.session_state.question_context)
     
     # Active Concept block
@@ -409,7 +437,7 @@ with col_workspace:
     </div>
     """, unsafe_allow_html=True)
     
-    # Study Notebook Header Row (Elevated upward)
+    # Study Notebook Section (Pulled up under Key Concept)
     insight_count = len(st.session_state.insights)
     st.markdown(f"""
     <div class="notebook-header-row">
@@ -417,7 +445,6 @@ with col_workspace:
     </div>
     """, unsafe_allow_html=True)
     
-    # Study Notebook content card
     if not st.session_state.insights:
         st.markdown("""
         <div class="notebook-container">
@@ -441,34 +468,43 @@ with col_workspace:
 
 
 # ==========================================
-# COLUMN 3: MIDDLE BREATHING MARGIN (10%)
+# COLUMN 3: MIDDLE GAP SPACE (10%)
 # ==========================================
 with col_space2:
     st.empty()
 
 
 # ==========================================
-# COLUMN 4: MINIMALIST AI TUTOR CHAT (20%)
+# COLUMN 4: MINIMALIST PIXEL-PERFECT CHAT (20%)
 # ==========================================
 with col_chat:
-    # Editorial wrapper for the chat column
+    st.markdown('<div class="right-chat-panel">', unsafe_allow_html=True)
+    
+    # Header Info Block
     st.markdown('<div class="chat-mode-header">SOCRATES</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="chat-mode-subheader">Active — {st.session_state.tutoring_mode}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="chat-header-divider"></div>', unsafe_allow_html=True)
     
-    # Clean dialogue container
+    # Chat container
     chat_container = st.container(height=450, border=False)
     
     with chat_container:
         for msg in st.session_state.chat_history:
-            sender = "Socrates" if msg["role"] == "assistant" or msg["role"] == "tutor" else "You"
-            st.markdown(f"""
-            <div class="msg-wrapper">
-                <div class="msg-sender">{sender}</div>
-                <div class="msg-content">{msg["content"]}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            if msg["role"] == "assistant" or msg["role"] == "tutor":
+                st.markdown(f"""
+                <div class="msg-wrapper">
+                    <div class="msg-sender-label-socrates">Socrates</div>
+                    <div class="msg-socrates-card">{msg["content"]}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div class="msg-wrapper">
+                    <div class="msg-sender-label-you">You</div>
+                    <div class="msg-you-card">{msg["content"]}</div>
+                </div>
+                """, unsafe_allow_html=True)
             
-    # Minimal Chat Input pinned at the base with target bottom-border overrides
     user_input = st.chat_input("Type your logic or formula...")
     
     if user_input:
@@ -477,12 +513,12 @@ with col_chat:
         with chat_container:
             st.markdown(f"""
             <div class="msg-wrapper">
-                <div class="msg-sender">You</div>
-                <div class="msg-content">{user_input}</div>
+                <div class="msg-sender-label-you">You</div>
+                <div class="msg-you-card">{user_input}</div>
             </div>
             """, unsafe_allow_html=True)
             
-            # Subtle loading text during API request lifecycle
+            # Loader matching Image 2
             status_placeholder = st.markdown('<div class="status-indicator">Socrates is processing...</div>', unsafe_allow_html=True)
             
             try:
@@ -492,7 +528,7 @@ with col_chat:
                     json={"user_text": user_input},
                     timeout=15
                 )
-                status_placeholder.empty() # Remove loader smoothly
+                status_placeholder.empty()
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -512,10 +548,12 @@ with col_chat:
             
             st.markdown(f"""
             <div class="msg-wrapper">
-                <div class="msg-sender">Socrates</div>
-                <div class="msg-content">{ai_response}</div>
+                <div class="msg-sender-label-socrates">Socrates</div>
+                <div class="msg-socrates-card">{ai_response}</div>
             </div>
             """, unsafe_allow_html=True)
             
         st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
         st.rerun()
+        
+    st.markdown('</div>', unsafe_allow_html=True)
