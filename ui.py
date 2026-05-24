@@ -22,7 +22,7 @@ if "current_question_id" not in st.session_state:
     st.session_state.current_question_id = "00899"
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [
-        {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
+        {"role": "assistant", "content": "Welcome. I'm ready to help you work through this physics problem. Where would you like to start?"}
     ]
 if "insights" not in st.session_state:
     st.session_state.insights = []
@@ -52,7 +52,7 @@ def sync_session_snapshot(session_id: str):
 
 
 def init_session(q_id: str):
-    """Initializes session on Port 8000. Automatically handles backend warmups."""
+    """Initializes session on Port 8000. Safely handles container warmups."""
     base_url = BACKEND_URL.rstrip("/")
     url = f"{base_url}/session/start/{q_id.strip()}"
     
@@ -197,27 +197,6 @@ st.markdown(textwrap.dedent("""
     line-height: 1.8 !important;
     color: #1D1D1F !important;
   }
-  
-  /* Active Concept metadata box with a left vertical border line */
-  .active-concept-section {
-    border-left: 2px solid #1D1D1F;
-    padding-left: 1.2rem;
-    margin: 2rem 0;
-  }
-  .active-concept-label {
-    font-size: 0.62rem;
-    font-weight: 700;
-    color: #86868B;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 0.4rem;
-  }
-  .active-concept-desc {
-    font-family: Georgia, "Times New Roman", serif;
-    font-size: 1rem;
-    line-height: 1.6;
-    color: #1D1D1F;
-  }
 
   /* Study Notebook Elements */
   .notebook-header-row {
@@ -240,7 +219,7 @@ st.markdown(textwrap.dedent("""
     border: 1px solid #E5E5EA;
     border-radius: 4px;
     padding: 3rem 1.5rem;
-    background-color: #F9F9FB;
+    background-color: #F5F5F7;
     text-align: center;
     min-height: 120px;
     display: flex;
@@ -261,7 +240,7 @@ st.markdown(textwrap.dedent("""
     background-color: #FFFFFF;
   }
 
-  /* Minimalist Chat panel divider logic on the right-hand column */
+  /* Minimalist Chat panel vertical divider layout */
   .right-chat-panel {
     border-left: 1px solid #E5E5EA;
     padding-left: 2rem;
@@ -282,7 +261,7 @@ st.markdown(textwrap.dedent("""
     font-size: 0.72rem;
     font-weight: 500;
     color: #86868B;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
   }
 
   /* Socrates Light Gray Message Bubble (Image 2 style) */
@@ -307,7 +286,7 @@ st.markdown(textwrap.dedent("""
     font-size: 0.95rem;
     line-height: 1.6;
     max-width: 90%;
-    margin-left: auto; /* Right-aligns the block perfectly */
+    margin-left: auto;
     text-align: left;
   }
 
@@ -384,7 +363,7 @@ st.markdown(textwrap.dedent("""
 """), unsafe_allow_html=True)
 
 
-# --- VI. PIXEL-PERFECT NATIVE HEADER ---
+# --- VII. PIXEL-PERFECT NATIVE HEADER ---
 st.markdown('<div class="top-bar-container">', unsafe_allow_html=True)
 h_col_left, h_col_center, h_col_right = st.columns([2, 5, 2])
 
@@ -408,12 +387,12 @@ with h_col_right:
 st.markdown('</div>', unsafe_allow_html=True)
 
 
-# --- VII. THE 10% / 60% / 10% / 20% GRID ---
-col_space1, col_workspace, col_space2, col_chat = st.columns([0.10, 0.60, 0.10, 0.20])
+# --- VIII. THE 7% / 60% / 8% / 25% GRID SPLIT ---
+col_space1, col_workspace, col_space2, col_chat = st.columns([0.07, 0.60, 0.08, 0.25])
 
 
 # ==========================================
-# COLUMN 1: LEFT BREATHING MARGIN (10%)
+# COLUMN 1: LEFT BREATHING MARGIN (7%)
 # ==========================================
 with col_space1:
     st.empty()
@@ -429,15 +408,7 @@ with col_workspace:
     # PROBLEM SHEET: Native Markdown forces perfect mathematical equation parsing
     st.markdown(st.session_state.question_context)
     
-    # Active Concept block
-    st.markdown("""
-    <div class="active-concept-section">
-        <div class="active-concept-label">KEY CONCEPT</div>
-        <div class="active-concept-desc">Apply Faraday's law of electromagnetic induction to find the maximum induced electromotive force in a rotating coil.</div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Study Notebook Section (Pulled up under Key Concept)
+    # Study Notebook Section (Pushed Directly Under Problem Description)
     insight_count = len(st.session_state.insights)
     st.markdown(f"""
     <div class="notebook-header-row">
@@ -468,14 +439,14 @@ with col_workspace:
 
 
 # ==========================================
-# COLUMN 3: MIDDLE GAP SPACE (10%)
+# COLUMN 3: MIDDLE GAP SPACE (8%)
 # ==========================================
 with col_space2:
     st.empty()
 
 
 # ==========================================
-# COLUMN 4: MINIMALIST PIXEL-PERFECT CHAT (20%)
+# COLUMN 4: MINIMALIST PIXEL-PERFECT CHAT (25%)
 # ==========================================
 with col_chat:
     st.markdown('<div class="right-chat-panel">', unsafe_allow_html=True)
@@ -505,6 +476,7 @@ with col_chat:
                 </div>
                 """, unsafe_allow_html=True)
             
+    # Minimal Chat Input pinned at the base
     user_input = st.chat_input("Type your logic or formula...")
     
     if user_input:
@@ -518,7 +490,7 @@ with col_chat:
             </div>
             """, unsafe_allow_html=True)
             
-            # Loader matching Image 2
+            # Subtle loading text during API request lifecycle
             status_placeholder = st.markdown('<div class="status-indicator">Socrates is processing...</div>', unsafe_allow_html=True)
             
             try:
@@ -528,7 +500,7 @@ with col_chat:
                     json={"user_text": user_input},
                     timeout=15
                 )
-                status_placeholder.empty()
+                status_placeholder.empty() # Remove loader smoothly
                 
                 if response.status_code == 200:
                     data = response.json()
