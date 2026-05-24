@@ -10,10 +10,12 @@ st.set_page_config(
     page_title="Physics Tutor"
 )
 
-# Connects directly to your live GCP backend API gateway
-BACKEND_URL = "https://ai-tutor-backend-952819720802.asia-south2.run.app"
+# SINGLE-CONTAINER ROUTING:
+# Streamlit talks directly to FastAPI internally within the same container on port 8000.
+# Bypasses GCP's public proxy firewall, cutting latency to ~2ms and eliminating 405 redirects.
+BACKEND_URL = "http://127.0.0.1:8000"
 
-# --- STATE MANAGEMENT & RECOVERY (LIVE PROD ONLY) ---
+# --- STATE MANAGEMENT & RECOVERY ---
 if "session_id" not in st.session_state:
     st.session_state.session_id = None
 if "current_question_id" not in st.session_state:
@@ -31,7 +33,7 @@ if "tutoring_mode" not in st.session_state:
 
 
 def sync_session_snapshot(session_id: str):
-    """Syncs session state. Fails loudly if backend is unreachable."""
+    """Syncs session state internally within the container."""
     try:
         base_url = BACKEND_URL.rstrip("/")
         res = requests.get(f"{base_url}/session/{session_id}", timeout=5)
@@ -45,12 +47,12 @@ def sync_session_snapshot(session_id: str):
             st.error(f"Failed to synchronize workspace state. Server returned code {res.status_code}.")
             st.stop()
     except Exception as e:
-        st.error(f"State synchronization failed. Unable to connect to backend engine: {e}")
+        st.error(f"Internal container sync failed: {e}")
         st.stop()
 
 
 def init_session(q_id: str):
-    """Initializes session. Breaks execution on backend connection failures."""
+    """Initializes session internally within the container network."""
     try:
         base_url = BACKEND_URL.rstrip("/")
         url = f"{base_url}/session/start/{q_id.strip()}"
@@ -67,10 +69,10 @@ def init_session(q_id: str):
             st.session_state.insights = []
             st.session_state.tutoring_mode = "SOCRATIC MODE"
         else:
-            st.error(f"Error: Could not spin up the physics tutor state engine on GCP (Status {res.status_code}).")
-            st.stop()  # Stop Streamlit execution cleanly
+            st.error(f"Internal container init failed (Status {res.status_code}).")
+            st.stop()
     except Exception as e:
-        st.error(f"Connection failed to live GCP Tutor Engine: {e}")
+        st.error(f"Internal API handshake failed: {e}")
         st.stop()
 
 
@@ -86,7 +88,7 @@ def navigate(direction: str):
         else:
             st.error("Navigation failed: Unable to fetch next problem state from GCP API.")
     except Exception as e:
-        st.error(f"Navigation failed: Unable to connect to API gateway ({e}).")
+        st.error(f"Internal navigation failed: {e}")
 
 
 # --- INITIALIZATION RUNNER ---
