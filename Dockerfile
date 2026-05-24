@@ -15,5 +15,5 @@ ENV STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
 # Google Cloud Run expects the app to listen on the environment variable $PORT
 EXPOSE 8080
 
-# Run FastAPI and Streamlit, explicitly passing the $PORT variable
-CMD uvicorn main:app --host 0.0.0.0 --port 8000 & streamlit run ui.py --server.port $PORT --server.address 0.0.0.0
+# Run FastAPI and Streamlit directly through Python to bypass PATH issues
+CMD python -m uvicorn main:app --host 0.0.0.0 --port 8000 & python -m streamlit run ui.py --server.port $PORT --server.address 0.0.0.0
