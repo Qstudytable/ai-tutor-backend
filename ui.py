@@ -13,7 +13,7 @@ st.set_page_config(
 # SINGLE-CONTAINER ROUTING:
 # Streamlit talks directly to FastAPI internally within the same container on port 8000.
 # Bypasses GCP's public proxy firewall, cutting latency to ~2ms and eliminating 405 redirects.
-BACKEND_URL = "http://127.0.0.1:8000"
+BACKEND_URL = "http://127.0.0.1:8080"
 
 # --- STATE MANAGEMENT & RECOVERY ---
 if "session_id" not in st.session_state:
