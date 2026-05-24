@@ -28,8 +28,35 @@ if "insights" not in st.session_state:
     st.session_state.insights = []
 if "question_context" not in st.session_state:
     st.session_state.question_context = ""
+if "question_title" not in st.session_state:
+    st.session_state.question_title = "Physics Dynamics Problem"
+if "question_topic" not in st.session_state:
+    st.session_state.question_topic = "Classical Mechanics"
 if "tutoring_mode" not in st.session_state:
     st.session_state.tutoring_mode = "Active — Socratic Mode"
+
+
+def extract_dynamic_metadata(data: dict):
+    """Dynamically parses API payload or question markdown content to prevent topic mismatch."""
+    # Attempt to extract metadata values directly from backend
+    topic = data.get("topic") or data.get("subject") or data.get("category")
+    title = data.get("title") or data.get("question_name")
+    
+    # Fallback to smart parsing if API does not supply metadata keys
+    if not topic:
+        context_lower = st.session_state.question_context.lower()
+        if "collides" in context_lower or "velocity" in context_lower or "mass" in context_lower:
+            topic = "Classical Mechanics"
+        elif "magnetic" in context_lower or "electromotive" in context_lower or "induction" in context_lower:
+            topic = "Electromagnetism"
+        else:
+            topic = "General Physics"
+            
+    if not title:
+        title = f"Problem Unit {st.session_state.current_question_id}"
+        
+    st.session_state.question_topic = topic
+    st.session_state.question_title = title
 
 
 def sync_session_snapshot(session_id: str):
@@ -43,6 +70,8 @@ def sync_session_snapshot(session_id: str):
             st.session_state.insights = data.get("notebook_history") or []
             mode = data.get("tutoring_mode", "socratic")
             st.session_state.tutoring_mode = "Active — Socratic Mode" if mode == "socratic" else "Active — Direct Mode"
+            
+            extract_dynamic_metadata(data)
         else:
             st.error(f"Failed to synchronize workspace state. Server returned code {res.status_code}.")
             st.stop()
@@ -70,6 +99,8 @@ def init_session(q_id: str):
                 ]
                 st.session_state.insights = []
                 st.session_state.tutoring_mode = "Active — Socratic Mode"
+                
+                extract_dynamic_metadata(data)
                 return
             else:
                 st.error(f"Internal initialization failed (Status {res.status_code}).")
@@ -108,6 +139,12 @@ if st.session_state.session_id is None:
     init_session(st.session_state.current_question_id)
 else:
     sync_session_snapshot(st.session_state.session_id)
+
+
+# --- DEDENT UTILITY TO PREVENT CODE BLOCK INTERPRETATION ---
+def clean_html(html_str: str) -> str:
+    """Removes leading spaces from all lines so markdown won't parse it as a code block."""
+    return "\n".join(line.strip() for line in html_str.strip().split("\n"))
 
 
 # --- EDITORIAL SYSTEM STYLING ---
@@ -164,39 +201,44 @@ st.markdown(textwrap.dedent("""
     font-weight: 500;
   }
 
-  /* Custom flat link behavior for native Streamlit buttons in header */
+  /* Custom flat link behavior for native Streamlit buttons */
   div.stButton > button {
     border: none !important;
     background-color: transparent !important;
     color: #5A5A57 !important;
     font-family: 'Plus Jakarta Sans', sans-serif !important;
-    font-size: 11px !important;
-    font-weight: 500 !important;
+    font-size: 10px !important;
+    font-weight: 600 !important;
     text-transform: uppercase !important;
     letter-spacing: 0.08em !important;
     padding: 0px !important;
     transition: color 0.2s ease;
     line-height: 1 !important;
     height: auto !important;
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    width: 100% !important;
+    min-width: unset !important;
   }
   div.stButton > button:hover {
     color: #121212 !important;
     background-color: transparent !important;
   }
 
-  /* Target Streamlit Columns directly to manage boundaries layout without split-DOM breaks */
+  /* Target Streamlit Columns directly for perfect 7-60-8-25 container rendering */
   [data-testid="column"]:nth-of-type(1) {
     border-right: 1px solid #EAE8E3;
     height: calc(100vh - 64px);
-    padding: 3rem 1.5rem !important;
+    padding: 3rem 0.5rem !important;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     background-color: #FFFFFF;
+    overflow: hidden;
   }
 
   [data-testid="column"]:nth-of-type(2) {
-    padding: 4rem 6% !important;
+    padding: 4rem 5% !important;
     overflow-y: auto !important;
     background-color: #FFFFFF;
     height: calc(100vh - 64px);
@@ -218,10 +260,10 @@ st.markdown(textwrap.dedent("""
   }
 
   .sidebar-meta {
-    font-size: 11px;
+    font-size: 10px;
     color: #90908C;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.12em;
     writing-mode: vertical-rl;
     transform: rotate(180deg);
     align-self: center;
@@ -229,9 +271,11 @@ st.markdown(textwrap.dedent("""
   }
 
   .page-indicator {
-    font-size: 12px;
+    font-size: 11px;
     color: #5A5A57;
     text-align: center;
+    margin-top: 1rem;
+    font-family: 'Plus Jakarta Sans', sans-serif;
   }
 
   .problem-meta {
@@ -434,32 +478,34 @@ col_nav, col_workspace, col_spacer, col_chat = st.columns([0.07, 0.60, 0.08, 0.2
 
 
 # ==========================================
-# COLUMN 1: NAVIGATION ASIDE (7% width)
+# COLUMN 1: NAVIGATION ASIDE (7% width) - Basically Empty Margin
 # ==========================================
 with col_nav:
-    st.markdown('<div class="sidebar-meta">Electromagnetic Induction</div>', unsafe_allow_html=True)
+    # Render the dynamic topic meta in vertical-rl mode
+    st.markdown(f'<div class="sidebar-meta">{st.session_state.question_topic}</div>', unsafe_allow_html=True)
     
-    # Flat action navigators
+    # Clean minimalist flat action navigators
     nav_link_col1, nav_link_col2 = st.columns([1, 1])
     with nav_link_col1:
         st.button("Prev", on_click=lambda: navigate("prev"))
     with nav_link_col2:
         st.button("Next", on_click=lambda: navigate("next"))
         
-    st.markdown(f'<div class="page-indicator">0{st.session_state.current_question_id[-1] if st.session_state.current_question_id[-1].isdigit() else "1"}/04</div>', unsafe_allow_html=True)
+    # Relative dynamic label representation to prevent calculation issues (e.g., unit ID representation)
+    st.markdown(f'<div class="page-indicator">ID {st.session_state.current_question_id}</div>', unsafe_allow_html=True)
 
 
 # ==========================================
-# COLUMN 2: PROBLEM WORKSPACE SHEET (60% width)
+# COLUMN 2: PROBLEM WORKSPACE SHEET (60% width) - Question + Notebook
 # ==========================================
 with col_workspace:
     st.markdown(f'<div class="problem-meta">Problem Unit {st.session_state.current_question_id}</div>', unsafe_allow_html=True)
-    st.markdown('<h1 class="problem-title">Maximum Induced Electromotive Force in a Rotating Coil</h1>', unsafe_allow_html=True)
+    st.markdown(f'<h1 class="problem-title">{st.session_state.question_title}</h1>', unsafe_allow_html=True)
     
-    # Problem text output
+    # Dynamically fetched contextual text rendered elegantly
     st.markdown(st.session_state.question_context)
     
-    # Study Notebook self-contained compilation block (prevents tag parsing breaks)
+    # Dynamic notebook structure built as a single block
     insight_count = len(st.session_state.insights)
     notebook_html = f"""
     <div class="notebook-wrapper">
@@ -482,25 +528,32 @@ with col_workspace:
             if step_key in rendered_steps:
                 continue
             rendered_steps.add(step_key)
+            
+            formula = insight.get('formula') or ""
+            # Fallback format checking if standard result formatting isn't explicitly defined in database
+            description = insight.get('description') or insight.get('desc') or f"Successfully verified: {insight.get('theorem', 'Concept')}. Calculated result quantity matches ground truth value: {insight.get('result', 'N/A')}."
+            
             notebook_html += f"""
             <div class="notebook-canvas">
-                <div class="notebook-formula">{insight.get('formula', '')}</div>
-                <div class="notebook-desc">Successfully verified: {insight.get('theorem', 'Concept')}. Calculated result quantity matches ground truth value: {insight.get('result', 'N/A')}.</div>
+                <div class="notebook-formula">{formula}</div>
+                <div class="notebook-desc">{description}</div>
             </div>
             """
     notebook_html += "</div>"
-    st.markdown(notebook_html, unsafe_allow_html=True)
+    
+    # Output notebook cleanly without leading spaces
+    st.markdown(clean_html(notebook_html), unsafe_allow_html=True)
 
 
 # ==========================================
-# COLUMN 3: STRUCTURAL SEPARATOR GUTTER (8% width)
+# COLUMN 3: STRUCTURAL SEPARATOR GUTTER (8% width) - Completely Empty
 # ==========================================
 with col_spacer:
     pass
 
 
 # ==========================================
-# COLUMN 4: SOCRATIC SIDEBAR DIALOGUE (25% width)
+# COLUMN 4: SOCRATIC SIDEBAR DIALOGUE (25% width) - Typical Chat Interface
 # ==========================================
 with col_chat:
     st.markdown('<div class="chat-title-area"><span class="chat-section-label">Dialogue Assistant</span></div>', unsafe_allow_html=True)
@@ -519,7 +572,7 @@ with col_chat:
             </div>
             """, unsafe_allow_html=True)
             
-    # Minimal Chat Input pinned at the base
+    # Minimal Chat Input pinned at base
     user_input = st.chat_input("Ask a question...")
     
     if user_input:
