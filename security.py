@@ -71,7 +71,7 @@ Classify the user's input into one of these exact categories:
 Return ONLY a raw JSON object: {"flag": "CATEGORY"}
 """
         try:
-            firewall_model = os.getenv("FIREWALL_MODEL", "gemini/gemini-1.5-flash-8b")
+            firewall_model = os.getenv("FIREWALL_MODEL", "gemini/gemini-2.5-flash")
             
             response = await asyncio.to_thread(
                 completion,
