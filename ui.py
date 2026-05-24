@@ -347,13 +347,6 @@ with col_workspace:
     # PROBLEM SHEET: Rendered natively to keep KaTeX engine parsing LaTeX math beautifully
     st.markdown(st.session_state.question_context)
     
-    # Active Concept block
-    st.markdown("""
-    <div class="active-concept-section">
-        <div class="active-concept-label">Active Concept</div>
-        <div class="active-concept-desc">Apply Faraday's law of electromagnetic induction to find the maximum induced electromotive force in a rotating coil.</div>
-    </div>
-    """, unsafe_allow_html=True)
     
     # Study Notebook Header Row
     insight_count = len(st.session_state.insights)
@@ -372,7 +365,13 @@ with col_workspace:
         </div>
         """, unsafe_allow_html=True)
     else:
+        rendered_steps = set()
         for insight in st.session_state.insights:
+            step_key = insight.get("step_key", "")
+            # Skip if we already displayed this card in this view cycle
+            if step_key in rendered_steps:
+                continue
+            rendered_steps.add(step_key)
             st.markdown(f"""
             <div class="notebook-card">
                 <div class="card-label" style="font-size: 0.64rem; font-weight:700; color:#86868B; text-transform:uppercase; letter-spacing: 0.04em;">{insight.get('theorem', 'Unlocked Step')}</div>
