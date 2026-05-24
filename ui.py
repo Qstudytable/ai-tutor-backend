@@ -7,7 +7,7 @@ import textwrap
 st.set_page_config(
     layout="wide", 
     initial_sidebar_state="collapsed", 
-    page_title="AI Tutor Workspace"
+    page_title="AI Tutor"
 )
 
 BACKEND_URL = "http://127.0.0.1:8000"
@@ -18,8 +18,7 @@ if "session_id" not in st.session_state:
 if "current_question_id" not in st.session_state:
     st.session_state.current_question_id = "00899"
 if "problem_context" not in st.session_state:
-    # Default fallback text
-    st.session_state.problem_context = "A rectangular coil has $N = 100$ turns, with side lengths $ab = 30cm$ and $ad = 20cm$..."
+    st.session_state.problem_context = "A rectangular coil has $N = 100$ turns..."
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "insights" not in st.session_state:
@@ -27,7 +26,6 @@ if "insights" not in st.session_state:
 if "status_text" not in st.session_state:
     st.session_state.status_text = ""
 
-# Auto-start session & fetch dynamic question context
 def init_session(q_id):
     try:
         res = requests.post(f"{BACKEND_URL}/session/start/{q_id}", timeout=5)
@@ -35,11 +33,8 @@ def init_session(q_id):
             data = res.json()
             st.session_state.session_id = data.get("session_id")
             st.session_state.current_question_id = data.get("question_id")
-            
-            # Dynamically pull the text for the new question!
             if data.get("context"):
                 st.session_state.problem_context = data.get("context")
-                
             st.session_state.chat_history = [{"role": "assistant", "content": "Welcome. I'm ready to help you work through this physics problem. Where would you like to start?"}]
             st.session_state.insights = []
     except Exception:
@@ -48,13 +43,11 @@ def init_session(q_id):
 if st.session_state.get("session_id") is None:
     init_session(st.session_state.current_question_id)
 
-# --- WIRED NAVIGATION CALLBACKS ---
 def nav_prev():
     try:
         res = requests.get(f"{BACKEND_URL}/questions/navigate/{st.session_state.current_question_id}/prev", timeout=3)
         if res.status_code == 200:
-            new_q_id = res.json().get("question_id")
-            init_session(new_q_id)
+            init_session(res.json().get("question_id"))
     except Exception:
         pass
 
@@ -62,13 +55,11 @@ def nav_next():
     try:
         res = requests.get(f"{BACKEND_URL}/questions/navigate/{st.session_state.current_question_id}/next", timeout=3)
         if res.status_code == 200:
-            new_q_id = res.json().get("question_id")
-            init_session(new_q_id)
+            init_session(res.json().get("question_id"))
     except Exception:
         pass
 
-
-# --- I. APPLE-ESQUE MINIMALIST CSS & ANIMATIONS ---
+# --- I. APPLE-ESQUE MINIMALIST CSS ---
 css_framework = textwrap.dedent("""
 <style>
     html, body, [data-testid="stAppViewContainer"] {
@@ -81,7 +72,7 @@ css_framework = textwrap.dedent("""
 
     .sys-time { font-size: 0.85rem; font-weight: 500; color: #86868B; letter-spacing: 0.04em; }
     
-    .chat-wrapper { height: 65vh; overflow-y: auto; padding-right: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem; margin-bottom: 1.5rem; scroll-behavior: smooth; }
+    .chat-wrapper { height: 60vh; overflow-y: auto; padding-right: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem; margin-bottom: 1.5rem; scroll-behavior: smooth; }
     .chat-wrapper::-webkit-scrollbar { width: 6px; }
     .chat-wrapper::-webkit-scrollbar-track { background: transparent; }
     .chat-wrapper::-webkit-scrollbar-thumb { background: #E5E5EA; border-radius: 10px; }
@@ -99,8 +90,8 @@ css_framework = textwrap.dedent("""
 
     .tag { font-size: 0.75rem; font-weight: 600; color: #86868B; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 12px; }
     .title { font-size: 2.2rem; font-weight: 600; letter-spacing: -0.02em; color: #1D1D1F; margin-bottom: 24px; }
-    .problem-desc { font-size: 1.15rem; line-height: 1.8; color: #1D1D1F; margin-bottom: 3rem; }
-    .active-task { background-color: #F5F5F7; border-radius: 12px; padding: 20px; margin-bottom: 3rem; border-left: 4px solid #1D1D1F; font-size: 1.05rem; line-height: 1.6; }
+    
+    /* Removed custom .problem-desc class mapping to allow native Streamlit Markdown to handle LaTeX properly */
     
     .notebook-section { margin-top: 4rem; border-top: 1px solid #E5E5EA; padding-top: 3rem; }
     .notebook-header { font-size: 0.85rem; font-weight: 600; color: #1D1D1F; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 1.5rem; }
@@ -137,21 +128,13 @@ st.markdown('<div style="border-bottom: 1px solid #E5E5EA; margin-bottom: 3rem;"
 # --- III. MAIN WORKSPACE SPLIT ---
 left_col, right_col = st.columns([5.5, 4.5], gap="large")
 
-# ==========================================
-# LEFT PANEL: QUESTION & NOTEBOOK
-# ==========================================
 with left_col:
     st.markdown('<div class="tag">Physics · Practice Module</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="title">Problem {st.session_state.current_question_id}</div>', unsafe_allow_html=True)
     
-    # DYNAMIC Problem Description pulled from backend
-    st.markdown(f"""
-    <div class="problem-desc">
-    {st.session_state.problem_context}
-    </div>
-    """, unsafe_allow_html=True)
+    # Native Streamlit markdown correctly parses all LaTeX tags seamlessly
+    st.markdown(f"<div style='font-size: 1.15rem; line-height: 1.8; color: #1D1D1F;'>{st.session_state.problem_context}</div>", unsafe_allow_html=True)
     
-    # Study Notebook Section
     st.markdown('<div class="notebook-section"><div class="notebook-header">Study Notebook</div>', unsafe_allow_html=True)
     
     if not st.session_state.insights:
@@ -167,10 +150,6 @@ with left_col:
             """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-
-# ==========================================
-# RIGHT PANEL: AI TUTOR CHAT
-# ==========================================
 with right_col:
     chat_html = '<div class="chat-wrapper" id="chat-stream">'
     
@@ -187,15 +166,16 @@ with right_col:
         </div>
         """
         
-    chat_html += """
-    </div>
-    <script>
-        var chatDiv = document.getElementById("chat-stream");
-        if(chatDiv) { chatDiv.scrollTop = chatDiv.scrollHeight; }
-    </script>
-    """
+    chat_html += '</div>'
     
-    st.components.v1.html(chat_html, height=500, scrolling=False) if hasattr(st, "components") else st.markdown(chat_html, unsafe_allow_html=True)
+    # THE FIX: Directly inject the styled HTML, NO TERNARY OPERATOR to trigger magic text output.
+    st.markdown(chat_html, unsafe_allow_html=True)
+    
+    # THE FIX: Isolate the auto-scroll Javascript in a hidden, size-zero iframe to keep things clean.
+    st.components.v1.html(
+        "<script>const chat = window.parent.document.getElementById('chat-stream'); if (chat) chat.scrollTop = chat.scrollHeight;</script>", 
+        height=0, width=0
+    )
     
     user_input = st.chat_input("Message Tutor...")
     
@@ -204,9 +184,7 @@ with right_col:
         st.session_state.status_text = "Thinking..."
         st.rerun()
 
-# ==========================================
-# BACKEND PROCESSOR
-# ==========================================
+# --- BACKEND PROCESSOR ---
 if st.session_state.status_text == "Thinking...":
     last_user_message = st.session_state.chat_history[-1]["content"]
      
