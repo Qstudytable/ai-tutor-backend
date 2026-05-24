@@ -1,201 +1,353 @@
 import streamlit as st
 import requests
-from datetime import datetime
+import datetime
+from datetime import datetime as dt
 
-# 1. Page Configuration (Must be wide to match your design)
-st.set_page_config(layout="wide", page_title="Physics Tutor", page_icon="⚛️", initial_sidebar_state="collapsed")
+# Set page config for wide layout and clean default elements
+st.set_page_config(
+    page_title="Physics Tutor",
+    page_icon="🎓",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-# 2. Injecting Custom CSS to match your exact design
+# Custom CSS for high-fidelity matching of colors, typography, and layout spacing
 st.markdown("""
-<style>
-    /* Hide default Streamlit headers and footers to make it look like a real app */
-    #MainMenu {visibility: hidden;}
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
-    
-    /* Adjust main padding */
+  <style>
+    /* Global styles */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;1,400&display=swap');
+     
+    html, body, [data-testid="stAppViewContainer"] {
+      background-color: #FFFFFF;
+      font-family: 'Inter', -apple-system, sans-serif;
+      color: #0F172A;
+    }
+     
+    /* Remove default Streamlit top decoration and padding */
+    [data-testid="stHeader"] {
+      display: none;
+    }
     .block-container {
-        padding-top: 1rem !important;
-        padding-left: 3rem !important;
-        padding-right: 3rem !important;
-        max-width: 100% !important;
-        font-family: 'Inter', sans-serif;
+      padding-top: 1.5rem !important;
+      padding-bottom: 1.5rem !important;
+      padding-left: 3rem !important;
+      padding-right: 3rem !important;
     }
-    
-    /* Top Navigation Bar */
-    .top-nav {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-bottom: 1px solid #eaeaea;
-        padding-bottom: 15px;
-        margin-bottom: 30px;
-        color: #111;
-        font-family: 'Inter', sans-serif;
+     
+    /* Header styling */
+    .header-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #E2E8F0;
+      padding-bottom: 1rem;
+      margin-bottom: 2rem;
     }
-    .top-nav .logo { font-weight: 700; font-size: 0.9rem; letter-spacing: 1.5px; }
-    .top-nav .date { font-size: 0.8rem; color: #666; letter-spacing: 1px; }
-
-    /* Active Concept Block */
-    .active-concept {
-        border-left: 3px solid #111;
-        padding-left: 20px;
-        margin: 30px 0;
+    .header-title {
+      font-family: 'Inter', sans-serif;
+      font-weight: 700;
+      font-size: 0.9rem;
+      letter-spacing: 0.15em;
+      color: #0F172A;
     }
-    .concept-label {
-        font-size: 0.75rem;
-        font-weight: 700;
-        color: #666;
-        letter-spacing: 1.2px;
-        margin-bottom: 8px;
-        text-transform: uppercase;
+    .header-date {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.75rem;
+      color: #64748B;
+      letter-spacing: 0.05em;
     }
-    .concept-text {
-        font-size: 1.1rem;
-        color: #222;
-        line-height: 1.5;
-        font-family: 'Georgia', serif; /* Gives that academic textbook feel */
+     
+    /* Breadcrumb */
+    .breadcrumb {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #94A3B8;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
     }
-
+     
+    /* Problem Title */
+    .problem-title {
+      font-family: 'Lora', Georgia, serif;
+      font-size: 1.85rem;
+      font-weight: 500;
+      color: #0F172A;
+      margin-bottom: 1.2rem;
+    }
+     
+    /* Problem Description */
+    .problem-desc {
+      font-family: 'Lora', Georgia, serif;
+      font-size: 1.1rem;
+      line-height: 1.7;
+      color: #334155;
+      margin-bottom: 2rem;
+    }
+     
+    /* Active Concept Box */
+    .active-concept-box {
+      border-left: 3px solid #0F172A;
+      padding-left: 1.25rem;
+      margin-top: 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+    .active-concept-label {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #64748B;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+    }
+    .active-concept-text {
+      font-family: 'Lora', Georgia, serif;
+      font-size: 1.05rem;
+      color: #1E293B;
+      line-height: 1.5;
+    }
+     
     /* Study Notebook */
-    .notebook-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-end;
-        margin-top: 50px;
-        margin-bottom: 10px;
+    .notebook-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
     }
-    .notebook-title { font-size: 0.8rem; font-weight: 700; letter-spacing: 1.2px; }
-    .notebook-count { font-size: 0.8rem; color: #999; }
-    
-    .notebook-box {
-        border: 1px solid #eaeaea;
-        border-radius: 8px;
-        background-color: #fafafa;
-        padding: 120px 20px;
-        text-align: center;
-        color: #888;
-        font-style: italic;
+    .notebook-title {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #475569;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
     }
-
-    /* Chat Area Styling */
-    .socratic-mode-label {
-        text-align: center;
-        font-size: 0.75rem;
-        font-weight: 700;
-        color: #888;
-        letter-spacing: 1.5px;
-        margin-bottom: 20px;
+    .notebook-counter {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.7rem;
+      color: #94A3B8;
     }
-</style>
+    .notebook-container {
+      border: 1px solid #E2E8F0;
+      background-color: #FAFAFA;
+      border-radius: 6px;
+      min-height: 250px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 1.5rem;
+    }
+    .notebook-placeholder {
+      font-family: 'Lora', Georgia, serif;
+      font-style: italic;
+      font-size: 0.95rem;
+      color: #64748B;
+      text-align: center;
+    }
+     
+    /* Sidebar layout and headers */
+    .sidebar-header {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #94A3B8;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-align: right;
+      margin-bottom: 2rem;
+      border-bottom: 1px solid #F1F5F9;
+      padding-bottom: 0.5rem;
+    }
+     
+    /* Chat bubble styles */
+    .chat-role-label {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #0F172A;
+      margin-top: 1.25rem;
+      margin-bottom: 0.25rem;
+    }
+    .chat-text {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      color: #334155;
+      margin-bottom: 1.25rem;
+    }
+    .status-indicator {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.85rem;
+      font-style: italic;
+      color: #94A3B8;
+      margin-top: 1rem;
+    }
+  </style>
 """, unsafe_allow_html=True)
 
-# 3. Top Navigation Bar
-current_date = datetime.now().strftime("%b %d").upper()
+# CRITICAL CLOUD FIX: Use Docker-safe loopback address
+BACKEND_URL = "http://127.0.0.1:8000"
+
+# --- State Management Initialization ---
+if "session_id" not in st.session_state:
+    st.session_state.session_id = None
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = [
+        {"role": "Socrates", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
+    ]
+if "insights" not in st.session_state:
+    st.session_state.insights = []
+if "status_text" not in st.session_state:
+    st.session_state.status_text = ""
+
+# Automatically trigger session start on application launch
+if st.session_state.get("session_id") is None:
+    try:
+        # Requesting mock session creation matching Problem 00899
+        res = requests.post(f"{BACKEND_URL}/session/start/00899", timeout=3)
+        if res.status_code == 200:
+            st.session_state.session_id = res.json().get("session_id")
+    except Exception:
+        # Safe fallback for standalone UI development
+        st.session_state.session_id = "sess_local_fallback"
+
+# --- Top Navigation/Header Layer ---
+now = dt.now()
+date_string = now.strftime("%b %d · %I:%M %p").upper()
+
 st.markdown(f"""
-<div class="top-nav">
-    <div class="logo">PHYSICS TUTOR</div>
-    <div class="date">{current_date} · ACTIVE SESSION</div>
-</div>
+  <div class="header-container">
+    <div class="header-title">PHYSICS TUTOR</div>
+    <div class="header-date">{date_string}</div>
+  </div>
 """, unsafe_allow_html=True)
 
-# 4. Create the Split Layout (Left: 60%, Right: 40%)
-col1, padding, col2 = st.columns([1.6, 0.1, 1])
+# --- Layout Grid: Main Workspace (col1) vs Socratic Companion Panel (col2) ---
+col1, col2 = st.columns([13, 7])
 
-# ==========================================
-# LEFT COLUMN (Problem & Notebook)
-# ==========================================
 with col1:
-    # Subtitle
-    st.markdown("<div style='color: #888; font-size: 0.8rem; font-weight: 600; letter-spacing: 1px; margin-bottom: 10px;'>CLASS 12 · ELECTROMAGNETIC INDUCTION</div>", unsafe_allow_html=True)
-    
-    # Title
-    st.markdown("<h1 style='margin-top: 0; padding-top: 0; font-size: 2rem; color: #111;'>Problem 00899</h1>", unsafe_allow_html=True)
-    st.write("") # Spacer
-
-    # Problem Text (With LaTeX rendering exactly like your image)
+    # 1. Breadcrumbs
+    st.markdown('<div class="breadcrumb">Class 12 · Electromagnetic Induction</div>', unsafe_allow_html=True)
+     
+    # 2. Problem Title
+    st.markdown('<div class="problem-title">Problem 00899</div>', unsafe_allow_html=True)
+     
+    # 3. Problem Description with proper LaTeX parsing
     st.markdown("""
-    <div style='font-size: 1.15rem; line-height: 1.8; color: #111; font-family: Georgia, serif;'>
-    A rectangular coil has $N = 100$ turns, with side lengths $ab = 30cm$ and $ad = 20cm$. 
-    It is placed in a uniform magnetic field with a magnetic induction strength of $B = 0.8T$. 
-    The coil rotates uniformly about the axis O' starting from the position shown in the diagram, 
-    with an angular velocity of $\\omega = 100\\pi$ rad/s.
-    </div>
+      <div class="problem-desc">
+        A rectangular coil has $N = 100$ turns, with side lengths $ab = 30cm$ and $ad = 20cm$. 
+        It is placed in a uniform magnetic field with a magnetic induction strength of $B = 0.8T$. 
+        The coil rotates uniformly about the axis O' starting from the position shown in the diagram, 
+        with an angular velocity of $\\omega = 100\\pi$ rad/s.
+      </div>
     """, unsafe_allow_html=True)
-
-    # Active Concept Block
+     
+    # 4. Active Concept blockquote
     st.markdown("""
-    <div class="active-concept">
-        <div class="concept-label">Active Concept</div>
-        <div class="concept-text">Apply Faraday's law of electromagnetic induction to find the maximum induced electromotive force in a rotating coil.</div>
-    </div>
+      <div class="active-concept-box">
+        <div class="active-concept-label">Active Concept</div>
+        <div class="active-concept-text">
+          Apply Faraday's law of electromagnetic induction to find the maximum induced electromotive force in a rotating coil.
+        </div>
+      </div>
     """, unsafe_allow_html=True)
-
-    # Study Notebook Area
-    notebook_insights = st.session_state.get("notebook_insights", 0)
+     
+    # 5. Study Notebook Component
     st.markdown(f"""
-    <div class="notebook-header">
-        <div class="notebook-title">STUDY NOTEBOOK</div>
-        <div class="notebook-count">{notebook_insights} Insights Recorded</div>
-    </div>
-    <div class="notebook-box">
-        Awaiting formulas and insights from chat...
-    </div>
+      <div class="notebook-label-row">
+        <div class="notebook-title">Study Notebook</div>
+        <div class="notebook-counter">{len(st.session_state.insights)} Insights Recorded</div>
+      </div>
     """, unsafe_allow_html=True)
+     
+    if not st.session_state.insights:
+        st.markdown("""
+          <div class="notebook-container">
+            <div class="notebook-placeholder">Awaiting formulas and insights from chat...</div>
+          </div>
+        """, unsafe_allow_html=True)
+    else:
+        # Dynamic rendering container for verified logic steps
+        insight_box_html = '<div class="notebook-container" style="display: block; align-items: flex-start;">'
+        for insight in st.session_state.insights:
+            insight_box_html += f"""
+              <div style="border-bottom: 1px solid #F1F5F9; padding-bottom: 0.75rem; margin-bottom: 0.75rem;">
+                <span style="font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: #475569;">
+                  {insight.get('theorem')}
+                </span><br/>
+                <code style="font-family: monospace; font-size: 1rem; color: #0F172A;">{insight.get('formula')}</code>
+                <span style="float: right; font-size: 0.85rem; color: #64748B;">Val: {insight.get('result')}</span>
+              </div>
+            """
+        insight_box_html += "</div>"
+        st.markdown(insight_box_html, unsafe_allow_html=True)
 
-# ==========================================
-# RIGHT COLUMN (Socratic Chat Interface)
-# ==========================================
 with col2:
-    st.markdown("<div class='socratic-mode-label'>SOCRATIC MODE</div>", unsafe_allow_html=True)
-    
-    # Initialize chat history if empty
-    if "messages" not in st.session_state:
-        st.session_state.messages = [
-            {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"},
-            {"role": "user", "content": "What is the basic concept?"}
-        ]
-
-    # Create a scrollable container for chat messages
-    chat_container = st.container(height=600, border=False)
-    
+    # Right Column - Socratic companion interface panel
+    st.markdown('<div class="sidebar-header">Socratic Mode</div>', unsafe_allow_html=True)
+     
+    # Scrollable space layout
+    chat_container = st.container()
+     
     with chat_container:
-        for msg in st.session_state.messages:
-            # We rename 'assistant' to 'Socrates' for the UI display
-            avatar = "🎓" if msg["role"] == "assistant" else "👤"
-            with st.chat_message(msg["role"], avatar=avatar):
-                st.markdown(msg["content"])
+        for chat_node in st.session_state.chat_history:
+            st.markdown(f'<div class="chat-role-label">{chat_node["role"]}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="chat-text">{chat_node["content"]}</div>', unsafe_allow_html=True)
+         
+        if st.session_state.status_text:
+            st.markdown(f'<div class="status-indicator">{st.session_state.status_text}</div>', unsafe_allow_html=True)
 
-    # Chat Input Box at the bottom
-    user_input = st.chat_input("Type logic or formula...")
+    # Input controller bar
+    with st.form("chat_form", clear_on_submit=True):
+        st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
+        user_input = st.text_input(
+            label="Hidden Form Label",
+            placeholder="Type logic or formula...",
+            label_visibility="collapsed"
+        )
+        submit_button = st.form_submit_button("SEND")
+       
+    if submit_button and user_input.strip() != "":
+        # Append User input and trigger status loading state
+        st.session_state.chat_history.append({"role": "You", "content": user_input})
+        st.session_state.status_text = "Analyzing physics principles..."
+        st.rerun()
 
-    if user_input:
-        # 1. Add User message to UI
-        st.session_state.messages.append({"role": "user", "content": user_input})
-        with chat_container:
-            with st.chat_message("user", avatar="👤"):
-                st.markdown(user_input)
-            
-            # 2. Add typing indicator
-            with st.chat_message("assistant", avatar="🎓"):
-                with st.spinner("Analyzing physics principles..."):
-                    try:
-                        # 3. Call your FastAPI backend!
-                        # (Matches the main.py server running on port 8000)
-                        res = requests.post(
-                            "http://127.0.0.1:8000/chat/demo123", 
-                            json={"user_text": user_input}
-                        )
-                        if res.status_code == 200:
-                            data = res.json()
-                            response_text = data["ai_response"]
-                        else:
-                            response_text = "I'm having trouble connecting to the logic engine."
-                    except Exception as e:
-                        response_text = "Backend is starting up, please hold on..."
-
-                # 4. Show AI response
-                st.markdown(response_text)
-                
-        # 5. Save AI response to session state
-        st.session_state.messages.append({"role": "assistant", "content": response_text})
+# Processing step for active AI tutor callbacks
+if st.session_state.status_text == "Analyzing physics principles...":
+    last_user_message = st.session_state.chat_history[-1]["content"]
+     
+    # Send values over to Engine endpoint
+    try:
+        response = requests.post(
+            f"{BACKEND_URL}/chat/{st.session_state.session_id}",
+            json={"user_text": last_user_message},
+            timeout=15
+        )
+        if response.status_code == 200:
+            data = response.json()
+            st.session_state.chat_history.append({
+                "role": "Socrates",
+                "content": data.get("ai_response")
+            })
+            # Save math concepts inside user's dynamic workspace
+            nb_updates = data.get("notebook_updates", {})
+            if nb_updates and nb_updates.get("official_solution"):
+                st.session_state.insights.append(nb_updates["official_solution"])
+        else:
+            st.session_state.chat_history.append({
+                "role": "Socrates",
+                "content": "I apologize, but I've encountered an issue evaluating the equations. Let's try to look at this step again."
+            })
+    except Exception:
+        # Failsafe if the API takes too long to wake up
+        st.session_state.chat_history.append({
+            "role": "Socrates",
+            "content": "The logic engine is starting up. Please give me a second and try again!"
+        })
+       
+    # Clear loading indicator status
+    st.session_state.status_text = ""
+    st.rerun()
