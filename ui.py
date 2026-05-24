@@ -11,16 +11,16 @@ st.set_page_config(
 )
 
 # Connects directly to your live GCP backend API gateway
-BACKEND_URL = "http://127.0.0.1:8000"
+BACKEND_URL = "https://ai-tutor-backend-952819720802.asia-south2.run.app"
 
-# --- STATE MANAGEMENT & RECOVERY ---
+# --- STATE MANAGEMENT & RECOVERY (LIVE PROD ONLY) ---
 if "session_id" not in st.session_state:
     st.session_state.session_id = None
 if "current_question_id" not in st.session_state:
     st.session_state.current_question_id = "00899"
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [
-        {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
+        {"role": "assistant", "content": "Welcome. I'm ready to help you work through this physics problem. Where would you like to start?"}
     ]
 if "insights" not in st.session_state:
     st.session_state.insights = []
@@ -31,57 +31,45 @@ if "tutoring_mode" not in st.session_state:
 
 
 def sync_session_snapshot(session_id: str):
-    """Syncs state dynamically from MongoDB if the browser is refreshed."""
-    try:
-        res = requests.get(f"{BACKEND_URL}/session/{session_id}", timeout=5)
-        if res.status_code == 200:
-            data = res.json()
-            st.session_state.chat_history = data.get("chat_history") or []
-            st.session_state.insights = data.get("notebook_history") or []
-            mode = data.get("tutoring_mode", "socratic")
-            st.session_state.tutoring_mode = "SOCRATIC MODE" if mode == "socratic" else "DIRECT MODE"
-        else:
-            st.error(f"Sync Failure: Backend returned status code {res.status_code}.")
-            st.stop()
-    except Exception as e:
-        st.error(f"State synchronization failed. Cannot reach tutor API: {e}")
-        st.stop()
+    """Syncs session state. Fails loudly if backend is unreachable."""
+    res = requests.get(f"{BACKEND_URL}/session/{session_id}", timeout=5)
+    if res.status_code == 200:
+        data = res.json()
+        st.session_state.chat_history = data.get("chat_history") or []
+        st.session_state.insights = data.get("notebook_history") or []
+        mode = data.get("tutoring_mode", "socratic")
+        st.session_state.tutoring_mode = "SOCRATIC MODE" if mode == "socratic" else "DIRECT MODE"
+    else:
+        st.error(f"Failed to synchronize workspace state. Server returned code {res.status_code}.")
 
 
 def init_session(q_id: str):
-    """Initializes a new attempt-based tracking session on GCP."""
-    try:
-        res = requests.post(f"{BACKEND_URL}/session/start/{q_id}", timeout=5)
-        if res.status_code == 200:
-            data = res.json()
-            st.session_state.session_id = data.get("session_id")
-            st.session_state.current_question_id = data.get("question_id")
-            st.session_state.question_context = data.get("context")
-            st.session_state.chat_history = [
-                {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
-            ]
-            st.session_state.insights = []
-            st.session_state.tutoring_mode = "SOCRATIC MODE"
-        else:
-            st.error(f"Initialization Failed: Backend returned status code {res.status_code}.")
-            st.stop()
-    except Exception as e:
-        st.error(f"Could not connect to live GCP Tutor Engine: {e}")
-        st.stop()
+    """Initializes session. Breaks execution on backend connection failures."""
+    res = requests.post(f"{BACKEND_URL}/session/start/{q_id}", timeout=5)
+    if res.status_code == 200:
+        data = res.json()
+        st.session_state.session_id = data.get("session_id")
+        st.session_state.current_question_id = data.get("question_id")
+        st.session_state.question_context = data.get("context")
+        st.session_state.chat_history = [
+            {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
+        ]
+        st.session_state.insights = []
+        st.session_state.tutoring_mode = "SOCRATIC MODE"
+    else:
+        st.error("Error: Could not spin up the physics tutor state engine on GCP.")
+        st.stop()  # Stop Streamlit execution cleanly
 
 
+# --- DYNAMIC BACKEND NAVIGATION ---
 def navigate(direction: str):
-    """Queries backend navigation routing to step through playlist cleanly."""
-    try:
-        res = requests.get(f"{BACKEND_URL}/questions/navigate/{st.session_state.current_question_id}/{direction}", timeout=5)
-        if res.status_code == 200:
-            next_q_id = res.json().get("question_id")
-            if next_q_id:
-                init_session(next_q_id)
-        else:
-            st.error(f"Navigation error: API returned {res.status_code}")
-    except Exception as e:
-        st.error(f"Could not reach navigation endpoint: {e}")
+    res = requests.get(f"{BACKEND_URL}/questions/navigate/{st.session_state.current_question_id}/{direction}", timeout=5)
+    if res.status_code == 200:
+        next_q_id = res.json().get("question_id")
+        if next_q_id:
+            init_session(next_q_id)
+    else:
+        st.error("Navigation failed: Unable to fetch next problem state from GCP API.")
 
 
 # --- INITIALIZATION RUNNER ---
@@ -303,17 +291,7 @@ st.markdown(textwrap.dedent("""
 """), unsafe_allow_html=True)
 
 
-# --- IV. TOP BAR NAVIGATION ---
-time_str = dt.now().strftime("%b %d · %I:%M %p").upper()
-st.markdown(f"""
-<div class="top-bar">
-    <div class="top-bar-title">Physics Tutor</div>
-    <div class="top-bar-date">{time_str}</div>
-</div>
-""", unsafe_allow_html=True)
-
-
-# --- V. EXACT RATIOMETRIC GRID LAYOUT ---
+# --- VII. EXACT HORIZONTAL GRID LAYOUT ---
 # 7% Space | 65% Workspace | 8% Space | 20% Tutor Chat
 col_space1, col_workspace, col_space2, col_chat = st.columns([0.07, 0.65, 0.08, 0.20])
 
