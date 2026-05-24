@@ -30,7 +30,7 @@ class InputValidator:
     )
     
     # Fast-pass pattern for clean mathematical inputs (bypasses security LLM)
-    MATH_ONLY_PATTERN = re.compile(r"^[0-9=+\-*/^xXyY\s().,\\theta\pi]+$")
+    MATH_ONLY_PATTERN = re.compile(r"^[0-9=+\-*/^xXyY\s().,\\theta\\pi]+$")
 
     @staticmethod
     def detect_shortcut_intent(user_text: str) -> UserIntent:
