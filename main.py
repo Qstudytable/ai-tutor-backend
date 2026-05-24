@@ -247,6 +247,7 @@ async def get_session(session_id: str) -> SessionSnapshotResponse:
 # STATE MACHINE COMPLIANT V3 SESSION START
 # ==========================================
 
+@app.post("/session/start/{question_id}/", response_model=StartSessionResponse)
 @app.post("/session/start/{question_id}", response_model=StartSessionResponse)
 async def start_session(question_id: str) -> StartSessionResponse:
     question = await load_question_or_404(question_id)
