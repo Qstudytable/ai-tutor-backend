@@ -1,0 +1,16 @@
+# Secrets & Keys
+.env
+
+# Python System Trash (Bloats GCP builds)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Local Mock DBs (Stops local tests from overwriting live GCP data)
+mock_sessions.json
+mock_question_library.json
+
+# Mac/Windows System junk
+.DS_Store
+Thumbs.db
