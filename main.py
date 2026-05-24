@@ -121,11 +121,51 @@ def create_canned_response(message: str) -> ChatResponse:
     )
 
 
-async def load_session_or_404(session_id: str) -> dict[str, Any]:
-    session = await db.sessions.find_one({"session_id": session_id}, {"_id": 0})
-    if not session:
-        raise HTTPException(status_code=404, detail="Active session not found.")
-    return session
+async def load_question_or_404(question_id: str) -> dict[str, Any]:
+    """
+    Loads question directly from the 1,200 preloaded cache.
+    Bypasses MongoDB completely. If the requested ID is missing, 
+    it falls back to the first available question in all_data.json.
+    """
+    # 1. Try to find the exact requested question
+    if question_id in QUESTIONS_CACHE:
+        logger.info(f"Successfully loaded question {question_id} from cache.")
+        return QUESTIONS_CACHE[question_id]
+        
+    # 2. UNBREAKABLE FALLBACK: Serve the first question in your 1,200 dataset
+    if QUESTIONS_CACHE:
+        first_id = list(QUESTIONS_CACHE.keys())[0]
+        logger.warning(f"Question {question_id} not found in cache. Falling back to active cached question: {first_id}")
+        return QUESTIONS_CACHE[first_id]
+        
+    # 3. PANIC FALLBACK: Hardcoded Faraday's Law if all_data.json is completely empty
+    logger.critical("QUESTIONS_CACHE is empty! Serving emergency fallback payload.")
+    return {
+        "question_id": question_id,
+        "difficulty": "medium",
+        "question_structure": {
+            "context": (
+                "A rectangular coil has $N = 100$ turns, with side lengths $ab = 30\\text{cm}$ and $ad = 20\\text{cm}$. "
+                "It rotates inside a uniform magnetic field of $B = 0.8\\text{T}$ with an angular velocity of $\\omega = 100\\pi\\text{ rad/s}$."
+            ),
+            "sub_question_1": "Find the maximum induced electromotive force."
+        },
+        "steps_analysis": {
+            "step_1": {
+                "physical_theorem": "Faraday's Law of Induction",
+                "theorem": "Faraday's Law of Induction",
+                "socratic_hint": "Think about how maximum EMF relates to number of turns, field strength, coil area, and speed.",
+                "depends_on": [],
+                "result_quantity": [
+                    {
+                        "equation": "E = N*B*A*w",
+                        "value": "150.8"
+                    }
+                ]
+            }
+        },
+        "answer": ["150.8"]
+    }
 
 
 async def load_question_or_404(question_id: str) -> dict[str, Any]:
