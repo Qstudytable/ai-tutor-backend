@@ -45,7 +45,7 @@ def sync_session_snapshot(session_id: str):
 def init_session(q_id: str):
     """Initializes session and displays the raw backend error if it fails."""
     try:
-        res = requests.post(f"{BACKEND_URL}/session/start/{q_id}", timeout=5)
+        res = requests.post(f"{BACKEND_URL}/session/start/{q_id}/", timeout=5, allow_redirects=True)
         if res.status_code == 200:
             data = res.json()
             st.session_state.session_id = data.get("session_id")
