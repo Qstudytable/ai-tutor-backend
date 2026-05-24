@@ -70,7 +70,7 @@ def init_session(q_id: str):
                 ]
                 st.session_state.insights = []
                 st.session_state.tutoring_mode = "Active — Socratic Mode"
-                return  # Connection successful, exit function
+                return
             else:
                 st.error(f"Internal initialization failed (Status {res.status_code}).")
                 st.stop()
@@ -124,12 +124,12 @@ st.markdown(textwrap.dedent("""
     -webkit-font-smoothing: antialiased;
   }
   
-  /* Strip Streamlit system garbage */
+  /* Strip Streamlit system elements */
   header, footer, #MainMenu { display: none !important; }
   .block-container { padding: 0 !important; max-width: 100% !important; }
 
   /* Premium Header Navigation Bar */
-  .top-header-wrapper {
+  .top-header {
     background-color: #FFFFFF;
     border-bottom: 1px solid #EAE8E3;
     padding: 0 4%;
@@ -138,6 +138,7 @@ st.markdown(textwrap.dedent("""
     align-items: center;
     height: 64px;
     width: 100%;
+    box-sizing: border-box;
   }
 
   .brand {
@@ -146,32 +147,12 @@ st.markdown(textwrap.dedent("""
     letter-spacing: 0.15em;
     text-transform: uppercase;
     color: #121212;
-    margin-top: 14px;
-  }
-
-  /* Center Navigation Panel styling */
-  .header-center-nav {
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-    margin-top: 10px;
-  }
-
-  .problem-indicator {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 12px;
-    font-weight: 500;
-    border-bottom: 1px solid #121212;
-    color: #121212;
-    padding-bottom: 2px;
-    letter-spacing: 0.05em;
   }
 
   .header-actions {
     display: flex;
     gap: 2rem;
     align-items: center;
-    margin-top: 14px;
   }
 
   .action-link {
@@ -203,15 +184,37 @@ st.markdown(textwrap.dedent("""
     background-color: transparent !important;
   }
 
-  /* Left 7% Sidebar container styling */
-  .col-nav-panel {
-    padding: 3rem 1.5rem;
+  /* Target Streamlit Columns directly to manage boundaries layout without split-DOM breaks */
+  [data-testid="column"]:nth-of-type(1) {
     border-right: 1px solid #EAE8E3;
     height: calc(100vh - 64px);
+    padding: 3rem 1.5rem !important;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     background-color: #FFFFFF;
+  }
+
+  [data-testid="column"]:nth-of-type(2) {
+    padding: 4rem 6% !important;
+    overflow-y: auto !important;
+    background-color: #FFFFFF;
+    height: calc(100vh - 64px);
+  }
+
+  [data-testid="column"]:nth-of-type(3) {
+    background-color: #FFFFFF;
+    border-right: 1px solid #EAE8E3;
+    height: calc(100vh - 64px);
+  }
+
+  [data-testid="column"]:nth-of-type(4) {
+    padding: 2.5rem 1.75rem !important;
+    background-color: #FFFFFF;
+    height: calc(100vh - 64px);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
   }
 
   .sidebar-meta {
@@ -231,14 +234,6 @@ st.markdown(textwrap.dedent("""
     text-align: center;
   }
 
-  /* Column 2: Problem & Workbook details */
-  .col-main-workspace {
-    padding: 4rem 6% !important;
-    overflow-y: auto;
-    background-color: #FFFFFF;
-    height: calc(100vh - 64px);
-  }
-
   .problem-meta {
     font-size: 11px;
     text-transform: uppercase;
@@ -256,12 +251,15 @@ st.markdown(textwrap.dedent("""
     letter-spacing: -0.01em;
   }
 
-  /* Forces Georgia/EB Garamond styling while keeping KaTeX parser completely operational */
+  /* Protect KaTeX syntax from Garamond override */
   .stMarkdown p {
     font-family: 'EB Garamond', serif !important;
     font-size: 16px !important;
     line-height: 1.8 !important;
     color: #121212 !important;
+  }
+  .stMarkdown p .katex, .stMarkdown p .katex * {
+    font-family: KaTeX_Main, 'Times New Roman', serif !important;
   }
 
   /* Study Notebook Elements */
@@ -290,6 +288,7 @@ st.markdown(textwrap.dedent("""
     display: flex;
     flex-direction: column;
     justify-content: center;
+    margin-bottom: 1rem;
   }
 
   .notebook-placeholder-box {
@@ -321,23 +320,6 @@ st.markdown(textwrap.dedent("""
     line-height: 1.5;
   }
 
-  /* Column 3: Gray Visual Separator Line (8% width) */
-  .col-spacer-panel {
-    background-color: #FFFFFF;
-    border-right: 1px solid #EAE8E3;
-    height: calc(100vh - 64px);
-  }
-
-  /* Column 4: Socratic Dialog Stream */
-  .col-chat-panel {
-    padding: 2.5rem 1.75rem;
-    background-color: #FFFFFF;
-    height: calc(100vh - 64px);
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-  }
-
   .chat-title-area {
     margin-bottom: 1.5rem;
   }
@@ -349,13 +331,13 @@ st.markdown(textwrap.dedent("""
     color: #90908C;
   }
 
-  /* Unbubbled text messages matching your precise specification */
+  /* Chat design configurations */
   .msg-wrapper {
     margin-bottom: 2rem;
     text-align: left;
   }
 
-  .msg-sender {
+  .msg-sender-label {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -370,8 +352,7 @@ st.markdown(textwrap.dedent("""
     color: #121212;
   }
 
-  /* Socrates left-border accent override */
-  .system-msg-content {
+  .msg-wrapper.system .msg-content-text {
     font-family: 'EB Garamond', serif !important;
     font-size: 14px !important;
     color: #121212 !important;
@@ -388,7 +369,7 @@ st.markdown(textwrap.dedent("""
     margin-top: 1rem;
   }
 
-  /* Override Streamlit chat formatting to strip standard bubbles cleanly */
+  /* Override Streamlit chat formatting elements */
   div[data-testid="stChatMessage"] {
     background-color: transparent !important;
     border: none !important;
@@ -397,7 +378,7 @@ st.markdown(textwrap.dedent("""
     margin-bottom: 1.5rem !important;
   }
 
-  /* Flat bottom line input matching Image 2 */
+  /* Flat bottom line input styling */
   [data-testid="stChatInput"] {
     border: none !important;
     border-bottom: 1.5px solid #121212 !important;
@@ -406,7 +387,7 @@ st.markdown(textwrap.dedent("""
     padding: 0.2rem 0rem !important;
   }
 
-  /* premium visual replacement trick: replace Streamlit default round button with "SEND" text link */
+  /* Replace Streamlit default round submit icon with flat SEND label */
   button[data-testid="stChatInputSubmit"] {
     background: none !important;
     border: none !important;
@@ -425,10 +406,10 @@ st.markdown(textwrap.dedent("""
     opacity: 0.7 !important;
   }
   button[data-testid="stChatInputSubmit"] svg {
-    display: none !important; /* Hide the gray arrow */
+    display: none !important;
   }
   button[data-testid="stChatInputSubmit"]::after {
-    content: "SEND" !important; /* Inject SEND text link */
+    content: "SEND" !important;
     display: block !important;
   }
 </style>
@@ -436,7 +417,7 @@ st.markdown(textwrap.dedent("""
 
 
 # --- IX. THE COMPILER HEADER ---
-st.markdown(f"""
+st.markdown("""
 <header class="top-header">
     <div class="brand">Socrates Workspace</div>
     <div class="header-actions">
@@ -456,7 +437,6 @@ col_nav, col_workspace, col_spacer, col_chat = st.columns([0.07, 0.60, 0.08, 0.2
 # COLUMN 1: NAVIGATION ASIDE (7% width)
 # ==========================================
 with col_nav:
-    st.markdown('<div class="col-nav-panel">', unsafe_allow_html=True)
     st.markdown('<div class="sidebar-meta">Electromagnetic Induction</div>', unsafe_allow_html=True)
     
     # Flat action navigators
@@ -467,37 +447,34 @@ with col_nav:
         st.button("Next", on_click=lambda: navigate("next"))
         
     st.markdown(f'<div class="page-indicator">0{st.session_state.current_question_id[-1] if st.session_state.current_question_id[-1].isdigit() else "1"}/04</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ==========================================
 # COLUMN 2: PROBLEM WORKSPACE SHEET (60% width)
 # ==========================================
 with col_workspace:
-    st.markdown('<div class="col-main-workspace">', unsafe_allow_html=True)
-    
     st.markdown(f'<div class="problem-meta">Problem Unit {st.session_state.current_question_id}</div>', unsafe_allow_html=True)
     st.markdown('<h1 class="problem-title">Maximum Induced Electromotive Force in a Rotating Coil</h1>', unsafe_allow_html=True)
     
-    # PROBLEM DESCRIPTION: Natively interpreted so math expressions render in gorgeous textbook-grade KaTeX
+    # Problem text output
     st.markdown(st.session_state.question_context)
     
-    # STUDY NOTEBOOK: Pushed directly under the question context (No gaps, no concept cards)
-    st.markdown('<div class="notebook-wrapper">', unsafe_allow_html=True)
+    # Study Notebook self-contained compilation block (prevents tag parsing breaks)
     insight_count = len(st.session_state.insights)
-    st.markdown(f"""
-    <div class="notebook-label">
-        <span>Active Study Notebook</span>
-        <span>{insight_count} Unlocked Insights</span>
-    </div>
-    """, unsafe_allow_html=True)
+    notebook_html = f"""
+    <div class="notebook-wrapper">
+        <div class="notebook-label">
+            <span>Active Study Notebook</span>
+            <span>{insight_count} Unlocked Insights</span>
+        </div>
+    """
     
     if not st.session_state.insights:
-        st.markdown("""
+        notebook_html += """
         <div class="notebook-placeholder-box">
             <div class="notebook-placeholder-text">No insights recorded yet. Solve steps in the chat to populate this area.</div>
         </div>
-        """, unsafe_allow_html=True)
+        """
     else:
         rendered_steps = set()
         for insight in st.session_state.insights:
@@ -505,31 +482,27 @@ with col_workspace:
             if step_key in rendered_steps:
                 continue
             rendered_steps.add(step_key)
-            
-            # Beautiful, crisp dark-border active notebook card matching Image 2
-            st.markdown(f"""
+            notebook_html += f"""
             <div class="notebook-canvas">
                 <div class="notebook-formula">{insight.get('formula', '')}</div>
                 <div class="notebook-desc">Successfully verified: {insight.get('theorem', 'Concept')}. Calculated result quantity matches ground truth value: {insight.get('result', 'N/A')}.</div>
             </div>
-            """, unsafe_allow_html=True)
-            
-    st.markdown('</div>', unsafe_allow_html=True) # Close notebook-wrapper
-    st.markdown('</div>', unsafe_allow_html=True) # Close col-main-workspace
+            """
+    notebook_html += "</div>"
+    st.markdown(notebook_html, unsafe_allow_html=True)
 
 
 # ==========================================
 # COLUMN 3: STRUCTURAL SEPARATOR GUTTER (8% width)
 # ==========================================
 with col_spacer:
-    st.markdown('<div class="col-spacer-panel"></div>', unsafe_allow_html=True)
+    pass
 
 
 # ==========================================
 # COLUMN 4: SOCRATIC SIDEBAR DIALOGUE (25% width)
 # ==========================================
 with col_chat:
-    st.markdown('<div class="col-chat-panel">', unsafe_allow_html=True)
     st.markdown('<div class="chat-title-area"><span class="chat-section-label">Dialogue Assistant</span></div>', unsafe_allow_html=True)
     
     # Height-locked conversational viewport
@@ -537,7 +510,7 @@ with col_chat:
     
     with chat_container:
         for msg in st.session_state.chat_history:
-            sender = "Socrates" if msg["role"] == "assistant" or msg["role"] == "tutor" else "You"
+            sender = "Socrates" if msg["role"] in ["assistant", "tutor"] else "You"
             wrapper_class = "msg-wrapper system" if sender == "Socrates" else "msg-wrapper"
             st.markdown(f"""
             <div class="{wrapper_class}">
@@ -560,7 +533,6 @@ with col_chat:
             </div>
             """, unsafe_allow_html=True)
             
-            # Subtle Georgia status loader
             status_placeholder = st.markdown('<div class="status-indicator">Socrates is processing...</div>', unsafe_allow_html=True)
             
             try:
@@ -570,7 +542,7 @@ with col_chat:
                     json={"user_text": user_input},
                     timeout=15
                 )
-                status_placeholder.empty() # Remove loader smoothly
+                status_placeholder.empty()
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -597,7 +569,3 @@ with col_chat:
             
         st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
         st.rerun()
-        
-    st.markdown('</div>', unsafe_allow_html=True) # Close col-chat-panel
-
-
