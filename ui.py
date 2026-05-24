@@ -8,7 +8,7 @@ import textwrap
 st.set_page_config(
     layout="wide", 
     initial_sidebar_state="collapsed", 
-    page_title="Physics Tutor"
+    page_title="STUDYtable"
 )
 
 # SINGLE-CONTAINER ROUTING:
@@ -22,14 +22,14 @@ if "current_question_id" not in st.session_state:
     st.session_state.current_question_id = "00899"
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [
-        {"role": "assistant", "content": "Welcome. I'm ready to help you work through this physics problem. Where would you like to start?"}
+        {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
     ]
 if "insights" not in st.session_state:
     st.session_state.insights = []
 if "question_context" not in st.session_state:
     st.session_state.question_context = ""
 if "tutoring_mode" not in st.session_state:
-    st.session_state.tutoring_mode = "SOCRATIC MODE"
+    st.session_state.tutoring_mode = "Active — Socratic Mode"
 
 
 def sync_session_snapshot(session_id: str):
@@ -42,7 +42,7 @@ def sync_session_snapshot(session_id: str):
             st.session_state.chat_history = data.get("chat_history") or []
             st.session_state.insights = data.get("notebook_history") or []
             mode = data.get("tutoring_mode", "socratic")
-            st.session_state.tutoring_mode = "SOCRATIC MODE" if mode == "socratic" else "DIRECT MODE"
+            st.session_state.tutoring_mode = "Active — Socratic Mode" if mode == "socratic" else "Active — Direct Mode"
         else:
             st.error(f"Failed to synchronize workspace state. Server returned code {res.status_code}.")
             st.stop()
@@ -54,12 +54,12 @@ def sync_session_snapshot(session_id: str):
 def init_session(q_id: str):
     """
     Initializes session on Port 8000.
-    Retries automatically to handle backend startup delays while Uvicorn caches questions.
+    10-retry grace window (30 seconds total) handles GCP container cache builds silently.
     """
     base_url = BACKEND_URL.rstrip("/")
     url = f"{base_url}/session/start/{q_id.strip()}"
     
-    max_retries = 5
+    max_retries = 10
     for attempt in range(max_retries):
         try:
             res = requests.post(url, timeout=5)
@@ -72,15 +72,17 @@ def init_session(q_id: str):
                     {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
                 ]
                 st.session_state.insights = []
-                st.session_state.tutoring_mode = "SOCRATIC MODE"
+                st.session_state.tutoring_mode = "Active — Socratic Mode"
                 return  # Connection successful, exit function
             else:
                 st.error(f"Internal initialization failed (Status {res.status_code}).")
                 st.stop()
         except requests.exceptions.ConnectionError:
+            # Silence warning banners during the first 3 startup attempts for a premium look
             if attempt < max_retries - 1:
-                st.warning(f"Connecting to physics tutor engine... (Attempt {attempt + 1}/{max_retries})")
-                time.sleep(2)
+                if attempt >= 3:
+                    st.warning(f"Connecting to physics tutor engine... (Attempt {attempt + 1}/{max_retries})")
+                time.sleep(3)
             else:
                 st.error("Error: Could not spin up the physics tutor state engine on GCP.")
                 st.info("The server is online, but the database backend failed to wake up in time. Please reload.")
@@ -129,10 +131,10 @@ st.markdown(textwrap.dedent("""
 
   /* Premium Top Navigation Bar Container */
   .top-bar-container {
-    border-bottom: 1px solid #F0F0F2;
-    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #E5E5EA;
+    padding-bottom: 0.8rem;
     margin-bottom: 2rem;
-    padding-left: 7%;
+    padding-left: 10%;
     padding-right: 20%;
   }
 
@@ -153,26 +155,29 @@ st.markdown(textwrap.dedent("""
   }
 
   .problem-indicator {
-    font-family: Georgia, "Times New Roman", serif;
-    font-style: italic;
-    font-size: 0.9rem;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 0.85rem;
+    font-weight: 500;
     border-bottom: 1px solid #1D1D1F;
     color: #1D1D1F;
     padding-bottom: 2px;
   }
 
-  .top-bar-date {
+  .top-bar-right-links {
     font-size: 0.72rem;
-    font-weight: 500;
+    font-weight: 600;
     color: #86868B;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.08em;
     text-align: right;
     margin-top: 6px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 1.5rem;
   }
 
   /* Left Panel Workspace Typography and Tags */
   .tag { 
-    font-size: 0.68rem; 
+    font-size: 0.64rem; 
     font-weight: 600; 
     color: #86868B; 
     letter-spacing: 0.08em; 
@@ -180,7 +185,7 @@ st.markdown(textwrap.dedent("""
     margin-bottom: 0.8rem; 
   }
   .title { 
-    font-size: 1.6rem; 
+    font-size: 1.8rem; 
     font-weight: 600; 
     letter-spacing: -0.01em; 
     color: #1D1D1F; 
@@ -194,6 +199,27 @@ st.markdown(textwrap.dedent("""
     line-height: 1.8 !important;
     color: #1D1D1F !important;
   }
+  
+  /* Active Concept metadata box with a left vertical border line */
+  .active-concept-section {
+    border-left: 2px solid #1D1D1F;
+    padding-left: 1.2rem;
+    margin: 2rem 0;
+  }
+  .active-concept-label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: #86868B;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 0.4rem;
+  }
+  .active-concept-desc {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: #515154;
+  }
 
   /* Study Notebook Elements */
   .notebook-header-row {
@@ -201,9 +227,9 @@ st.markdown(textwrap.dedent("""
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
-    margin-top: 2.5rem;
-    border-bottom: 1px solid #F0F0F2;
-    padding-bottom: 0.5rem;
+    margin-top: 2rem;
+    border-top: 1px solid #F0F0F2;
+    padding-top: 1.5rem;
   }
   .notebook-title {
     font-size: 0.68rem;
@@ -217,21 +243,20 @@ st.markdown(textwrap.dedent("""
     color: #86868B;
   }
   .notebook-container {
-    border: 1px solid #E5E5EA;
+    border: 1px solid #F0F0F2;
     border-radius: 4px;
-    padding: 5rem 1.5rem;
-    background-color: #FFFFFF;
+    padding: 3rem 1.5rem;
+    background-color: #F9F9FB;
     text-align: center;
-    min-height: 250px;
+    min-height: 120px;
     display: flex;
     align-items: center;
     justify-content: center;
   }
   .notebook-placeholder {
-    font-family: Georgia, "Times New Roman", serif;
-    font-style: italic;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     color: #86868B;
-    font-size: 0.98rem;
+    font-size: 0.85rem;
   }
   .notebook-card {
     border: 1px solid #E5E5EA;
@@ -253,37 +278,44 @@ st.markdown(textwrap.dedent("""
   }
   
   .chat-mode-header {
-    text-align: center;
-    font-size: 0.68rem;
+    text-align: left;
+    font-size: 0.8rem;
     font-weight: 700;
-    letter-spacing: 0.12em;
+    color: #1D1D1F;
+    margin-bottom: 0.2rem;
+  }
+  
+  .chat-mode-subheader {
+    text-align: left;
+    font-size: 0.72rem;
+    font-weight: 500;
     color: #86868B;
-    text-transform: uppercase;
-    margin-bottom: 1.8rem;
+    margin-bottom: 2rem;
   }
 
   /* Unbubbled typography chat wrapper */
   .msg-wrapper {
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.8rem;
   }
   .msg-sender {
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     font-weight: 700;
-    color: #1D1D1F;
-    margin-bottom: 0.3rem;
-    letter-spacing: 0.02em;
+    color: #86868B;
+    margin-bottom: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
   .msg-content {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-    font-size: 0.92rem;
+    font-size: 0.95rem;
     line-height: 1.6;
     color: #1D1D1F;
   }
   .status-indicator {
-    font-family: Georgia, "Times New Roman", serif;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     font-style: italic;
     color: #86868B;
-    font-size: 0.88rem;
+    font-size: 0.85rem;
     margin-top: 1rem;
   }
 
@@ -302,7 +334,7 @@ st.markdown(textwrap.dedent("""
     background-color: transparent !important;
     color: #86868B !important;
     font-family: -apple-system, sans-serif !important;
-    font-size: 0.85rem !important;
+    font-size: 0.82rem !important;
     font-weight: 500 !important;
     padding: 0px !important;
     transition: color 0.2s ease;
@@ -312,18 +344,19 @@ st.markdown(textwrap.dedent("""
     background-color: transparent !important;
   }
   
-  /* Clean editorial input overrides */
+  /* Clean editorial input overrides with bottom border layout */
   [data-testid="stChatInput"] {
-    border: 1px solid #E5E5EA !important;
-    border-radius: 4px !important;
+    border: none !important;
+    border-bottom: 1px solid #1D1D1F !important;
+    border-radius: 0px !important;
     background: #FFFFFF !important;
-    padding: 0.2rem !important;
+    padding: 0.2rem 0rem !important;
   }
 </style>
 """), unsafe_allow_html=True)
 
 
-# --- VI. NATIVE EDITORIAL HEADER WITH WORKSPACE NAVIGATION ---
+# --- IV. NATIVE EDITORIAL HEADER WITH WORKSPACE NAVIGATION ---
 st.markdown('<div class="top-bar-container">', unsafe_allow_html=True)
 h_col_left, h_col_center, h_col_right = st.columns([2, 5, 2])
 
@@ -331,7 +364,6 @@ with h_col_left:
     st.markdown('<div class="top-bar-title">PHYSICS TUTOR</div>', unsafe_allow_html=True)
 
 with h_col_center:
-    # Renders active navigation links matching your target layout
     st.markdown('<div class="top-bar-center">', unsafe_allow_html=True)
     nav_col1, nav_col2, nav_col3 = st.columns([1, 2, 1])
     with nav_col1:
@@ -343,39 +375,45 @@ with h_col_center:
     st.markdown('</div>', unsafe_allow_html=True)
 
 with h_col_right:
-    time_str = dt.now().strftime("%b %d · %I:%M %p").upper()
-    st.markdown(f'<div class="top-bar-date">{time_str}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="top-bar-right-links"><span>UPLOAD</span><span>EXIT</span></div>', unsafe_allow_html=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
 
 
-# --- VII. EXACT HORIZONTAL GRID LAYOUT ---
-col_space1, col_workspace, col_space2, col_chat = st.columns([0.07, 0.65, 0.08, 0.20])
+# --- V. EXACT HORIZONTAL GRID LAYOUT (10% | 60% | 10% | 20%) ---
+col_space1, col_workspace, col_space2, col_chat = st.columns([0.10, 0.60, 0.10, 0.20])
 
 
 # ==========================================
-# COLUMN 1: LEFT BREATHING MARGIN (7%)
+# COLUMN 1: LEFT BREATHING MARGIN (10%)
 # ==========================================
 with col_space1:
     st.empty()
 
 
 # ==========================================
-# COLUMN 2: WORKSPACE CONTAINER (65%)
+# COLUMN 2: WORKSPACE CONTAINER (60%)
 # ==========================================
 with col_workspace:
-    st.markdown('<div class="tag">Class 12 · Electromagnetic Induction</div>', unsafe_allow_html=True)
+    st.markdown('<div class="tag">Physics / Class 12 / Electromagnetic Induction</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="title">Problem {st.session_state.current_question_id}</div>', unsafe_allow_html=True)
     
     # PROBLEM SHEET: Rendered natively to keep KaTeX engine parsing LaTeX math beautifully
     st.markdown(st.session_state.question_context)
     
-    # Study Notebook Header Row
+    # Active Concept block
+    st.markdown("""
+    <div class="active-concept-section">
+        <div class="active-concept-label">KEY CONCEPT</div>
+        <div class="active-concept-desc">Apply Faraday's law of electromagnetic induction to find the maximum induced electromotive force in a rotating coil.</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Study Notebook Header Row (Elevated upward)
     insight_count = len(st.session_state.insights)
     st.markdown(f"""
     <div class="notebook-header-row">
         <div class="notebook-title">Study Notebook</div>
-        <div class="notebook-count">{insight_count} Insights Unlocked</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -383,14 +421,13 @@ with col_workspace:
     if not st.session_state.insights:
         st.markdown("""
         <div class="notebook-container">
-            <div class="notebook-placeholder">Awaiting formulas and insights from chat...</div>
+            <div class="notebook-placeholder">No insights recorded yet. Solve steps in the chat to populate this area.</div>
         </div>
         """, unsafe_allow_html=True)
     else:
         rendered_steps = set()
         for insight in st.session_state.insights:
             step_key = insight.get("step_key", "")
-            # Skip if we already displayed this card in this view cycle
             if step_key in rendered_steps:
                 continue
             rendered_steps.add(step_key)
@@ -404,7 +441,7 @@ with col_workspace:
 
 
 # ==========================================
-# COLUMN 3: MIDDLE BREATHING MARGIN (8%)
+# COLUMN 3: MIDDLE BREATHING MARGIN (10%)
 # ==========================================
 with col_space2:
     st.empty()
@@ -415,7 +452,8 @@ with col_space2:
 # ==========================================
 with col_chat:
     # Editorial wrapper for the chat column
-    st.markdown(f'<div class="chat-mode-header">{st.session_state.tutoring_mode}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="chat-mode-header">SOCRATES</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="chat-mode-subheader">Active — {st.session_state.tutoring_mode}</div>', unsafe_allow_html=True)
     
     # Clean dialogue container
     chat_container = st.container(height=450, border=False)
@@ -430,8 +468,8 @@ with col_chat:
             </div>
             """, unsafe_allow_html=True)
             
-    # Minimal Chat Input pinned at the base
-    user_input = st.chat_input("Type logic or formula...")
+    # Minimal Chat Input pinned at the base with target bottom-border overrides
+    user_input = st.chat_input("Type your logic or formula...")
     
     if user_input:
         st.session_state.chat_history.append({"role": "user", "content": user_input})
@@ -445,7 +483,7 @@ with col_chat:
             """, unsafe_allow_html=True)
             
             # Subtle loading text during API request lifecycle
-            status_placeholder = st.markdown('<div class="status-indicator">Analyzing physics principles...</div>', unsafe_allow_html=True)
+            status_placeholder = st.markdown('<div class="status-indicator">Socrates is processing...</div>', unsafe_allow_html=True)
             
             try:
                 base_url = BACKEND_URL.rstrip("/")
@@ -461,7 +499,7 @@ with col_chat:
                     ai_response = data.get("ai_response", "I'm having trouble analyzing this step.")
                     
                     backend_mode = data.get("phase", "SOCRATIC")
-                    st.session_state.tutoring_mode = "SOCRATIC MODE" if backend_mode == "SOCRATIC" else "DIRECT MODE"
+                    st.session_state.tutoring_mode = "Socratic Mode" if backend_mode == "SOCRATIC" else "Direct Mode"
                     
                     nb_updates = data.get("notebook_updates", {})
                     if nb_updates and nb_updates.get("official_solution"):
