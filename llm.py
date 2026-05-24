@@ -155,7 +155,7 @@ async def complete_tutor_turn(messages: list[dict[str, str]]) -> tuple[str, Note
     """
     from litellm import completion
 
-    model = os.getenv("LLM_MODEL", "gemini/gemini-1.5-flash")
+    model = os.getenv("LLM_MODEL", "gemini/gemini-2.5-flash")
     try:
         response = await asyncio.to_thread(
             completion,
@@ -190,7 +190,7 @@ async def generate_transition_message(solved_theorem: str, next_theorem: str | N
             f"Celebrate their final victory enthusiastically in 1-2 warm sentences."
         )
         
-    model = os.getenv("LLM_MODEL", "gemini/gemini-1.5-flash")
+    model = os.getenv("LLM_MODEL", "gemini/gemini-2.5-flash")
     try:
         response = await asyncio.to_thread(
             completion,
