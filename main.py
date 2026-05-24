@@ -121,6 +121,22 @@ def create_canned_response(message: str) -> ChatResponse:
     )
 
 
+async def load_session_or_404(session_id: str) -> dict[str, Any]:
+    session = await db.sessions.find_one({"session_id": session_id}, {"_id": 0})
+    if not session:
+        # Failsafe session payload so it never crashes if database connection drops
+        return {
+            "session_id": session_id,
+            "question_id": "00899",
+            "completed_steps": [],
+            "current_focused_step": "step_1",
+            "step_attempts": {"step_1": 0},
+            "notebook_history": [],
+            "chat_history": []
+        }
+    return session
+
+
 async def load_question_or_404(question_id: str) -> dict[str, Any]:
     """
     Loads question directly from the 1,200 preloaded cache.
@@ -131,13 +147,13 @@ async def load_question_or_404(question_id: str) -> dict[str, Any]:
     if question_id in QUESTIONS_CACHE:
         logger.info(f"Successfully loaded question {question_id} from cache.")
         return QUESTIONS_CACHE[question_id]
-        
+         
     # 2. UNBREAKABLE FALLBACK: Serve the first question in your 1,200 dataset
     if QUESTIONS_CACHE:
         first_id = list(QUESTIONS_CACHE.keys())[0]
         logger.warning(f"Question {question_id} not found in cache. Falling back to active cached question: {first_id}")
         return QUESTIONS_CACHE[first_id]
-        
+         
     # 3. PANIC FALLBACK: Hardcoded Faraday's Law if all_data.json is completely empty
     logger.critical("QUESTIONS_CACHE is empty! Serving emergency fallback payload.")
     return {
@@ -166,15 +182,6 @@ async def load_question_or_404(question_id: str) -> dict[str, Any]:
         },
         "answer": ["150.8"]
     }
-
-
-async def load_question_or_404(question_id: str) -> dict[str, Any]:
-    if question_id in QUESTIONS_CACHE:
-        return QUESTIONS_CACHE[question_id]
-    question = await db.question_library.find_one({"question_id": question_id}, {"_id": 0})
-    if not question:
-        raise HTTPException(status_code=404, detail="Question not found.")
-    return question
 
 
 # ==========================================
@@ -388,7 +395,7 @@ async def tutor_chat(request: Request, session_id: str, body: ChatRequest) -> Ch
     # Only verify math if student didn't explicitly yell "help"
     if intent != UserIntent.EXPLICIT_HELP:
         user_math_only = ChronosEngine.extract_math_from_text(body.user_text)
-        
+         
         # A. Final Answer Bypass Check
         final_answers = question.get("answer") or []
         if not isinstance(final_answers, list):
@@ -430,7 +437,7 @@ async def tutor_chat(request: Request, session_id: str, body: ChatRequest) -> Ch
         for step_key in active_nodes:
             node = steps_dict[step_key]
             formula, final_value, theorem = extract_step_data_safe(node)
-            
+             
             is_correct = False
             if formula:
                 is_correct, signal = ChronosEngine.verify_math(user_math_only, formula)
