@@ -78,10 +78,10 @@ def init_session(q_id: str):
                 st.error(f"Internal initialization failed (Status {res.status_code}).")
                 st.stop()
         except requests.exceptions.ConnectionError:
-            # If the backend is still loading, wait 3 seconds and retry
+            # If the backend is still loading, wait 2 seconds and retry
             if attempt < max_retries - 1:
                 st.warning(f"Connecting to physics tutor engine... (Attempt {attempt + 1}/{max_retries})")
-                time.sleep(3)
+                time.sleep(2)
             else:
                 st.error("Error: Could not spin up the physics tutor state engine on GCP.")
                 st.info("The server is online, but the database backend failed to wake up in time. Please reload.")
@@ -176,27 +176,6 @@ st.markdown(textwrap.dedent("""
     line-height: 1.8 !important;
     color: #1D1D1F !important;
   }
-  
-  /* Active Concept metadata box with a left vertical border line */
-  .active-concept-section {
-    border-left: 1px solid #1D1D1F;
-    padding-left: 1.2rem;
-    margin: 2.2rem 0;
-  }
-  .active-concept-label {
-    font-size: 0.62rem;
-    font-weight: 700;
-    color: #86868B;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 0.4rem;
-  }
-  .active-concept-desc {
-    font-family: Georgia, "Times New Roman", serif;
-    font-size: 1rem;
-    line-height: 1.6;
-    color: #1D1D1F;
-  }
 
   /* Study Notebook Elements */
   .notebook-header-row {
@@ -290,28 +269,13 @@ st.markdown(textwrap.dedent("""
     margin-top: 1rem;
   }
 
-  /* Override Streamlit Chat layout elements */
+  /* Override Streamlit Chat layout elements to strip bubbles */
   div[data-testid="stChatMessage"] {
     background-color: transparent !important;
     border: none !important;
     box-shadow: none !important;
     padding: 0 !important;
     margin-bottom: 1.5rem !important;
-  }
-  
-  /* Rounded navigation buttons */
-  [data-testid="stButton"] button {
-    border-radius: 24px;
-    border: 1px solid #E5E5EA;
-    background: #FFFFFF;
-    color: #1D1D1F;
-    font-weight: 500;
-    font-size: 0.8rem;
-    padding: 0.2rem 1rem;
-  }
-  [data-testid="stButton"] button:hover {
-    background: #F5F5F7;
-    border-color: #D2D2D7;
   }
   
   /* Clean editorial input overrides */
@@ -325,7 +289,17 @@ st.markdown(textwrap.dedent("""
 """), unsafe_allow_html=True)
 
 
-# --- IX. EXACT HORIZONTAL GRID LAYOUT ---
+# --- IV. TOP BAR HEADER ---
+time_str = dt.now().strftime("%b %d · %I:%M %p").upper()
+st.markdown(f"""
+<div class="top-bar">
+    <div class="top-bar-title">Physics Tutor</div>
+    <div class="top-bar-date">{time_str}</div>
+</div>
+""", unsafe_allow_html=True)
+
+
+# --- V. EXACT HORIZONTAL GRID LAYOUT ---
 # 7% Space | 65% Workspace | 8% Space | 20% Tutor Chat
 col_space1, col_workspace, col_space2, col_chat = st.columns([0.07, 0.65, 0.08, 0.20])
 
@@ -346,7 +320,6 @@ with col_workspace:
     
     # PROBLEM SHEET: Rendered natively to keep KaTeX engine parsing LaTeX math beautifully
     st.markdown(st.session_state.question_context)
-    
     
     # Study Notebook Header Row
     insight_count = len(st.session_state.insights)
