@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+import time
 from datetime import datetime as dt
 import textwrap
 
@@ -11,9 +12,8 @@ st.set_page_config(
 )
 
 # SINGLE-CONTAINER ROUTING:
-# Streamlit talks directly to FastAPI internally within the same container on port 8000.
-# Bypasses GCP's public proxy firewall, cutting latency to ~2ms and eliminating 405 redirects.
-BACKEND_URL = "http://127.0.0.1:8080"
+# Streamlit connects directly to FastAPI internally on Port 8000 (verified by logs).
+BACKEND_URL = "http://127.0.0.1:8000"
 
 # --- STATE MANAGEMENT & RECOVERY ---
 if "session_id" not in st.session_state:
@@ -33,7 +33,7 @@ if "tutoring_mode" not in st.session_state:
 
 
 def sync_session_snapshot(session_id: str):
-    """Syncs session state internally within the container."""
+    """Syncs session state. Fails loudly if backend is unreachable."""
     try:
         base_url = BACKEND_URL.rstrip("/")
         res = requests.get(f"{base_url}/session/{session_id}", timeout=5)
@@ -52,28 +52,43 @@ def sync_session_snapshot(session_id: str):
 
 
 def init_session(q_id: str):
-    """Initializes session internally within the container network."""
-    try:
-        base_url = BACKEND_URL.rstrip("/")
-        url = f"{base_url}/session/start/{q_id.strip()}"
-        res = requests.post(url, timeout=5)
-        
-        if res.status_code == 200:
-            data = res.json()
-            st.session_state.session_id = data.get("session_id")
-            st.session_state.current_question_id = data.get("question_id")
-            st.session_state.question_context = data.get("context")
-            st.session_state.chat_history = [
-                {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
-            ]
-            st.session_state.insights = []
-            st.session_state.tutoring_mode = "SOCRATIC MODE"
-        else:
-            st.error(f"Internal container init failed (Status {res.status_code}).")
+    """
+    Initializes session on Port 8000.
+    Retries automatically to handle backend startup delays while Uvicorn caches questions.
+    """
+    base_url = BACKEND_URL.rstrip("/")
+    url = f"{base_url}/session/start/{q_id.strip()}"
+    
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            res = requests.post(url, timeout=5)
+            if res.status_code == 200:
+                data = res.json()
+                st.session_state.session_id = data.get("session_id")
+                st.session_state.current_question_id = data.get("question_id")
+                st.session_state.question_context = data.get("context")
+                st.session_state.chat_history = [
+                    {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
+                ]
+                st.session_state.insights = []
+                st.session_state.tutoring_mode = "SOCRATIC MODE"
+                return  # Connection successful, exit function
+            else:
+                st.error(f"Internal initialization failed (Status {res.status_code}).")
+                st.stop()
+        except requests.exceptions.ConnectionError:
+            # If the backend is still loading, wait 3 seconds and retry
+            if attempt < max_retries - 1:
+                st.warning(f"Connecting to physics tutor engine... (Attempt {attempt + 1}/{max_retries})")
+                time.sleep(3)
+            else:
+                st.error("Error: Could not spin up the physics tutor state engine on GCP.")
+                st.info("The server is online, but the database backend failed to wake up in time. Please reload.")
+                st.stop()
+        except Exception as e:
+            st.error(f"Internal API handshake failed: {e}")
             st.stop()
-    except Exception as e:
-        st.error(f"Internal API handshake failed: {e}")
-        st.stop()
 
 
 # --- DYNAMIC BACKEND NAVIGATION ---
@@ -310,7 +325,7 @@ st.markdown(textwrap.dedent("""
 """), unsafe_allow_html=True)
 
 
-# --- VIII. EXACT HORIZONTAL GRID LAYOUT ---
+# --- IX. EXACT HORIZONTAL GRID LAYOUT ---
 # 7% Space | 65% Workspace | 8% Space | 20% Tutor Chat
 col_space1, col_workspace, col_space2, col_chat = st.columns([0.07, 0.65, 0.08, 0.20])
 
