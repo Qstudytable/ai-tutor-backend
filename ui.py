@@ -1,223 +1,188 @@
 import streamlit as st
 import requests
-import datetime
+from datetime import datetime as dt
 import textwrap
 
 # --- GLOBAL LAYOUT CONFIGURATION ---
-st.set_page_config(layout="wide", initial_sidebar_state="collapsed", page_title="Learning Platform")
+st.set_page_config(
+    layout="wide", 
+    initial_sidebar_state="collapsed", 
+    page_title="AI Tutor Workspace"
+)
 
 BACKEND_URL = "http://127.0.0.1:8000"
 
+# --- STATE MANAGEMENT ---
 if "session_id" not in st.session_state:
     st.session_state.session_id = None
+if "current_question_id" not in st.session_state:
+    st.session_state.current_question_id = "00899"
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [
-        {"role": "assistant", "content": "System initialized. Asynchronous learning session active."}
+        {"role": "assistant", "content": "Welcome. I'm ready to help you work through this physics problem. Where would you like to start?"}
     ]
 if "insights" not in st.session_state:
     st.session_state.insights = []
 if "status_text" not in st.session_state:
     st.session_state.status_text = ""
 
-# Auto-start session silently
-if st.session_state.get("session_id") is None:
+# Auto-start or switch session if needed
+def init_session(q_id):
     try:
-        res = requests.post(f"{BACKEND_URL}/session/start/00899", timeout=3)
+        res = requests.post(f"{BACKEND_URL}/session/start/{q_id}", timeout=3)
         if res.status_code == 200:
             st.session_state.session_id = res.json().get("session_id")
+            st.session_state.chat_history = [{"role": "assistant", "content": "Welcome. I'm ready to help you work through this physics problem. Where would you like to start?"}]
+            st.session_state.insights = []
     except Exception:
         st.session_state.session_id = "sess_local_fallback"
 
-# --- I. GLOBAL LAYOUT FRAMEWORK (CSS) ---
-# textwrap.dedent removes indentation so Streamlit doesn't create gray code blocks
+if st.session_state.get("session_id") is None:
+    init_session(st.session_state.current_question_id)
+
+# --- NAVIGATION CALLBACKS ---
+def nav_prev():
+    # In a fully connected app, this would call the /questions/navigate endpoint
+    # For now, it resets the current session for demonstration
+    init_session(st.session_state.current_question_id)
+
+def nav_next():
+    init_session(st.session_state.current_question_id)
+
+# --- I. APPLE-ESQUE MINIMALIST CSS ---
 css_framework = textwrap.dedent("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Georgia&display=swap');
-
-    /* Viewport Config */
+    /* Apple-System Typography & Clean Workspace */
     html, body, [data-testid="stAppViewContainer"] {
-        height: 100vh;
-        width: 100vw;
-        overflow: hidden;
-        margin: 0;
-        padding: 0;
-        background-color: #ffffff;
-        font-family: 'Inter', sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background-color: #FFFFFF;
+        color: #1D1D1F;
     }
     
     /* Hide Streamlit Cruft */
     header, footer, #MainMenu { display: none !important; }
-    .block-container { padding: 0 !important; max-width: 100% !important; }
+    .block-container { padding: 2rem 4rem !important; max-width: 100% !important; }
 
-    /* Header Section */
-    .global-header {
-        height: 60px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0 6%;
-        border-bottom: 1px solid #e9ecef;
-        background-color: #ffffff;
-    }
-    .header-brand { font-size: 0.9rem; font-weight: 700; letter-spacing: 0.05em; color: #212529; }
-    .header-utility { font-size: 0.85rem; color: #6c757d; }
-
-    /* Main Workspace Split - Target Streamlit Columns */
-    [data-testid="column"]:nth-of-type(1) {
-        height: calc(100vh - 60px);
-        padding: 2% 5% 5% 10% !important;
-        overflow-y: auto;
-    }
-    [data-testid="column"]:nth-of-type(2) {
-        height: calc(100vh - 60px);
-        padding: 30px !important;
-        background-color: #f8f9fa;
-        border-left: 1px solid #e9ecef;
-        overflow-y: auto;
-        display: flex;
-        flex-direction: column;
-    }
-
-    /* Primary Left Panel Typography */
-    .breadcrumb { font-size: 0.7rem; color: #6c757d; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 20px; font-weight: 600; }
-    .main-id-header { font-family: 'Georgia', serif; font-size: 1.8rem; font-weight: bold; color: #212529; margin-bottom: 25px; }
-    .body-desc { font-family: 'Georgia', serif; font-size: 1.05rem; line-height: 1.6; color: #333333; margin-bottom: 35px; }
+    /* Header Utilities */
+    .sys-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #E5E5EA; padding-bottom: 1rem; margin-bottom: 2rem; }
+    .sys-time { font-size: 0.85rem; font-weight: 500; color: #86868B; letter-spacing: 0.02em; }
     
-    /* Active Context Container */
-    .context-container { border-left: 3px solid #212529; padding-left: 20px; margin-bottom: 60px; }
-    .context-label { font-size: 0.7rem; color: #6c757d; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-bottom: 8px; }
-    .context-desc { font-family: 'Georgia', serif; font-size: 0.95rem; color: #212529; line-height: 1.5; }
+    /* Left Panel: Chat Interface */
+    .chat-container { display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
+    .chat-bubble { padding: 12px 16px; border-radius: 18px; max-width: 85%; font-size: 0.95rem; line-height: 1.5; }
+    .chat-user { background-color: #F5F5F7; color: #1D1D1F; align-self: flex-end; border-bottom-right-radius: 4px; }
+    .chat-ai { background-color: #FFFFFF; border: 1px solid #E5E5EA; color: #1D1D1F; align-self: flex-start; border-bottom-left-radius: 4px; }
+    .status-text { font-size: 0.85rem; color: #86868B; font-style: italic; align-self: flex-start; margin-left: 10px; }
 
-    /* Study Notebook */
-    .notebook-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px; }
-    .notebook-label { font-size: 0.75rem; font-weight: 700; color: #212529; text-transform: uppercase; letter-spacing: 0.05em; }
-    .notebook-counter { font-size: 0.7rem; color: #adb5bd; }
-    .notebook-workspace { background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; min-height: 30vh; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px;}
-    .notebook-placeholder { font-family: 'Georgia', serif; font-style: italic; color: #adb5bd; font-size: 0.95rem; }
-    .notebook-item { width: 100%; border-bottom: 1px solid #e9ecef; padding-bottom: 15px; margin-bottom: 15px; }
+    /* Right Panel: Typography */
+    .tag { font-size: 0.75rem; font-weight: 600; color: #86868B; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px; }
+    .title { font-size: 2rem; font-weight: 600; letter-spacing: -0.02em; color: #1D1D1F; margin-bottom: 16px; }
+    
+    /* Right Panel: Notebook */
+    .notebook-section { margin-top: 3rem; border-top: 1px solid #E5E5EA; padding-top: 2rem; }
+    .notebook-header { font-size: 0.85rem; font-weight: 600; color: #1D1D1F; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 1rem; }
+    .notebook-card { background-color: #F5F5F7; border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid transparent; transition: border 0.2s ease;}
+    .notebook-card:hover { border: 1px solid #D2D2D7; }
+    .card-label { font-size: 0.75rem; font-weight: 600; color: #86868B; text-transform: uppercase; margin-bottom: 6px; }
+    .card-value { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 1.1rem; color: #1D1D1F; }
 
-    /* Secondary Right Panel Typography */
-    .chat-header { border-bottom: 1px solid #e9ecef; padding-bottom: 10px; margin-bottom: 20px; }
-    .chat-header-main { font-size: 0.85rem; font-weight: 700; text-transform: uppercase; color: #212529; letter-spacing: 0.05em; }
-    .chat-header-sub { font-size: 0.75rem; color: #6c757d; margin-top: 4px; }
-    
-    .chat-stream { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; margin-bottom: 20px; }
-    
-    .msg-block { display: flex; flex-direction: column; width: 100%; }
-    .msg-block.assistant { align-items: flex-start; }
-    .msg-block.user { align-items: flex-end; }
-    
-    .msg-sender { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: #6c757d; margin-bottom: 6px; }
-    .msg-content { font-size: 0.9rem; line-height: 1.5; color: #212529; padding: 12px 16px; border-radius: 6px; }
-    .msg-block.assistant .msg-content { background-color: #ffffff; border: 1px solid #e9ecef; width: 100%; }
-    .msg-block.user .msg-content { background-color: #e9ecef; max-width: 85%; }
-    
-    .status-feedback { font-family: 'Georgia', serif; font-style: italic; font-size: 0.85rem; color: #adb5bd; }
-
-    /* Streamlit Input Wrapper Override */
-    [data-testid="stChatInput"] { border: 1px solid #e9ecef !important; border-radius: 45px !important; background: #ffffff !important; padding-right: 5px !important;}
+    /* Streamlit Overrides for Buttons and Inputs */
+    [data-testid="stButton"] button { border-radius: 20px; border: 1px solid #E5E5EA; background: #FFFFFF; color: #1D1D1F; font-weight: 500; transition: all 0.2s ease; }
+    [data-testid="stButton"] button:hover { background: #F5F5F7; border-color: #D2D2D7; color: #1D1D1F;}
+    [data-testid="stChatInput"] { border: 1px solid #E5E5EA !important; border-radius: 24px !important; background: #F5F5F7 !important; }
+    [data-testid="stChatInput"]:focus-within { background: #FFFFFF !important; border-color: #0071E3 !important; box-shadow: 0 0 0 3px rgba(0,113,227,0.1) !important; }
 </style>
 """)
-
 st.markdown(css_framework, unsafe_allow_html=True)
 
-# --- GLOBAL HEADER ---
-current_time = datetime.datetime.now().strftime("%Y-%m-%d | %H:%M UTC")
-header_html = f"""
-<div class="global-header">
-    <div class="header-brand">PLATFORM INTERFACE</div>
-    <div class="header-utility">{current_time}</div>
-</div>
-"""
-st.markdown(header_html, unsafe_allow_html=True)
+# --- II. HEADER & CONTROLS ---
+now = dt.now()
+time_str = now.strftime("%A, %B %d | %I:%M %p").upper()
 
-# --- WORKSPACE SPLIT ---
-col1, col2 = st.columns([6, 4], gap="small")
+st.markdown(f'<div class="sys-time">{time_str}</div>', unsafe_allow_html=True)
+st.markdown('<div style="height: 1rem;"></div>', unsafe_allow_html=True)
 
-# --- II. PRIMARY LEFT PANEL ---
-with col1:
+h_col1, h_col2, h_col3 = st.columns([1, 8, 1])
+with h_col1:
+    st.button("← Prev", on_click=nav_prev, use_container_width=True)
+with h_col3:
+    st.button("Next →", on_click=nav_next, use_container_width=True)
+
+st.markdown('<div style="border-bottom: 1px solid #E5E5EA; margin-bottom: 2rem;"></div>', unsafe_allow_html=True)
+
+
+# --- III. MAIN WORKSPACE SPLIT ---
+# Left: Chat (40%), Right: Question & Notebook (60%)
+left_col, right_col = st.columns([4, 6], gap="large")
+
+# ==========================================
+# LEFT PANEL: AI TUTOR CHAT
+# ==========================================
+with left_col:
+    # We construct the chat feed using Apple-style bubbles
+    chat_html = '<div class="chat-container">'
     
-    if not st.session_state.insights:
-        notebook_content = '<span class="notebook-placeholder">Workspace empty. Awaiting asynchronous input...</span>'
-    else:
-        notebook_content = ""
-        for insight in st.session_state.insights:
-            notebook_content += f"""
-            <div class="notebook-item">
-                <div style="font-size: 0.7rem; font-weight: 600; color: #6c757d; margin-bottom: 5px;">{insight.get('theorem')}</div>
-                <div style="font-family: monospace; font-size: 1rem; color: #212529;">{insight.get('formula')}</div>
-            </div>
-            """
-
-    left_panel_html = f"""
-<div class="breadcrumb">CATEGORY / SUB-MODULE AREA</div>
-
-<div class="main-id-header">Main Content ID Header</div>
-
-<div class="body-desc">
-    This is the body description block. It hosts the multi-line structural content zone, styled entirely in a highly legible serif typography system. The text here spans multiple lines to establish visual weight and reading rhythm before handing off to the interactive elements below.
-</div>
-
-<div class="context-container">
-    <div class="context-label">Active Context Container</div>
-    <div class="context-desc">Inner description field formatting. Anchored by the structural left-border indicator.</div>
-</div>
-
-<div class="notebook-header">
-    <span class="notebook-label">Study Notebook Element</span>
-    <span class="notebook-counter">{len(st.session_state.insights)} ENTRIES LOGGED</span>
-</div>
-
-<div class="notebook-workspace">
-    {notebook_content}
-</div>
-"""
-    st.markdown(left_panel_html, unsafe_allow_html=True)
-
-
-# --- III. SECONDARY RIGHT PANEL ---
-with col2:
-    
-    # Right panel structure
-    chat_html = """
-<div class="chat-header">
-    <div class="chat-header-main">Interactive Chat Interface</div>
-    <div class="chat-header-sub">System Status: Awaiting User Input</div>
-</div>
-
-<div class="chat-stream">
-"""
     for msg in st.session_state.chat_history:
-        role_class = "user" if msg["role"] == "You" else "assistant"
-        sender_name = "User Profile" if msg["role"] == "You" else "Assistant Profile"
-        
-        chat_html += f"""
-    <div class="msg-block {role_class}">
-        <div class="msg-sender">{sender_name}</div>
-        <div class="msg-content">{msg["content"]}</div>
-    </div>
-"""
-        
+        if msg["role"] == "You":
+            chat_html += f'<div class="chat-bubble chat-user">{msg["content"]}</div>'
+        else:
+            chat_html += f'<div class="chat-bubble chat-ai">{msg["content"]}</div>'
+            
     if st.session_state.status_text:
-        chat_html += f"""
-    <div class="msg-block assistant">
-        <div class="status-feedback">{st.session_state.status_text}</div>
-    </div>
-"""
+        chat_html += f'<div class="status-text">{st.session_state.status_text}</div>'
         
-    chat_html += "</div>"
+    chat_html += '</div>'
+    
+    # Render Chat
     st.markdown(chat_html, unsafe_allow_html=True)
-
-    # Input Box Tool
-    user_input = st.chat_input("Type your response here...")
+    
+    # Render Input 
+    user_input = st.chat_input("Message Tutor...")
     
     if user_input:
         st.session_state.chat_history.append({"role": "You", "content": user_input})
-        st.session_state.status_text = "Processing asynchronous request..."
+        st.session_state.status_text = "Thinking..."
         st.rerun()
 
-# --- BACKEND LOGIC ROUTER ---
-if st.session_state.status_text == "Processing asynchronous request...":
+# ==========================================
+# RIGHT PANEL: QUESTION & NOTEBOOK
+# ==========================================
+with right_col:
+    # Tags & Title
+    st.markdown('<div class="tag">Physics · Electromagnetic Induction</div>', unsafe_allow_html=True)
+    st.markdown('<div class="title">Problem 00899</div>', unsafe_allow_html=True)
+    
+    # Problem Description (Native Markdown ensures LaTeX works perfectly)
+    st.markdown("""
+    A rectangular coil has $N = 100$ turns, with side lengths $ab = 30cm$ and $ad = 20cm$. 
+    It is placed in a uniform magnetic field with a magnetic induction strength of $B = 0.8T$. 
+    The coil rotates uniformly about the axis O' starting from the position shown in the diagram, 
+    with an angular velocity of $\\omega = 100\\pi$ rad/s.
+    
+    **Active Task:** Apply Faraday's law of electromagnetic induction to find the maximum induced electromotive force in a rotating coil.
+    """)
+    
+    # Study Notebook Section
+    st.markdown('<div class="notebook-section"><div class="notebook-header">Study Notebook</div>', unsafe_allow_html=True)
+    
+    if not st.session_state.insights:
+        st.markdown('<div style="color: #86868B; font-style: italic; font-size: 0.9rem;">No insights recorded yet. Talk to the tutor to begin unlocking steps.</div></div>', unsafe_allow_html=True)
+    else:
+        for insight in st.session_state.insights:
+            st.markdown(f"""
+            <div class="notebook-card">
+                <div class="card-label">{insight.get('theorem', 'Physics Principle')}</div>
+                <div class="card-value">{insight.get('formula', '')}</div>
+                <div style="font-size: 0.85rem; color: #86868B; margin-top: 8px;">Final Value: {insight.get('result', 'N/A')}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+
+# ==========================================
+# BACKEND PROCESSOR
+# ==========================================
+if st.session_state.status_text == "Thinking...":
     last_user_message = st.session_state.chat_history[-1]["content"]
      
     try:
