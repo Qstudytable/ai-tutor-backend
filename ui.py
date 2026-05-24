@@ -38,7 +38,6 @@ if "tutoring_mode" not in st.session_state:
 
 def extract_dynamic_metadata(data: dict):
     """Dynamically parses API payload or question markdown content to prevent topic mismatch."""
-    # Attempt to extract metadata values directly from backend
     topic = data.get("topic") or data.get("subject") or data.get("category")
     title = data.get("title") or data.get("question_name")
     
@@ -118,7 +117,6 @@ def init_session(q_id: str):
             st.stop()
 
 
-# --- DYNAMIC BACKEND NAVIGATION ---
 def navigate(direction: str):
     try:
         base_url = BACKEND_URL.rstrip("/")
@@ -141,9 +139,8 @@ else:
     sync_session_snapshot(st.session_state.session_id)
 
 
-# --- DEDENT UTILITY TO PREVENT CODE BLOCK INTERPRETATION ---
 def clean_html(html_str: str) -> str:
-    """Removes leading spaces from all lines so markdown won't parse it as a code block."""
+    """Removes leading spaces from all lines so markdown won't parse it as an indented code block."""
     return "\n".join(line.strip() for line in html_str.strip().split("\n"))
 
 
@@ -460,7 +457,7 @@ st.markdown(textwrap.dedent("""
 """), unsafe_allow_html=True)
 
 
-# --- IX. THE COMPILER HEADER ---
+# --- THE COMPILER HEADER ---
 st.markdown("""
 <header class="top-header">
     <div class="brand">Socrates Workspace</div>
@@ -473,39 +470,38 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# --- X. THE 7% / 60% / 8% / 25% HORIZONTAL MATRIX GRID ---
+# --- THE 7% / 60% / 8% / 25% HORIZONTAL MATRIX GRID ---
 col_nav, col_workspace, col_spacer, col_chat = st.columns([0.07, 0.60, 0.08, 0.25])
 
 
 # ==========================================
-# COLUMN 1: NAVIGATION ASIDE (7% width) - Basically Empty Margin
+# COLUMN 1: NAVIGATION ASIDE (7% width)
 # ==========================================
 with col_nav:
-    # Render the dynamic topic meta in vertical-rl mode
+    # Render the dynamic topic metadata in vertical-rl mode
     st.markdown(f'<div class="sidebar-meta">{st.session_state.question_topic}</div>', unsafe_allow_html=True)
     
-    # Clean minimalist flat action navigators
+    # Flat action navigators
     nav_link_col1, nav_link_col2 = st.columns([1, 1])
     with nav_link_col1:
         st.button("Prev", on_click=lambda: navigate("prev"))
     with nav_link_col2:
         st.button("Next", on_click=lambda: navigate("next"))
         
-    # Relative dynamic label representation to prevent calculation issues (e.g., unit ID representation)
     st.markdown(f'<div class="page-indicator">ID {st.session_state.current_question_id}</div>', unsafe_allow_html=True)
 
 
 # ==========================================
-# COLUMN 2: PROBLEM WORKSPACE SHEET (60% width) - Question + Notebook
+# COLUMN 2: PROBLEM WORKSPACE SHEET (60% width)
 # ==========================================
 with col_workspace:
     st.markdown(f'<div class="problem-meta">Problem Unit {st.session_state.current_question_id}</div>', unsafe_allow_html=True)
     st.markdown(f'<h1 class="problem-title">{st.session_state.question_title}</h1>', unsafe_allow_html=True)
     
-    # Dynamically fetched contextual text rendered elegantly
+    # Problem text output
     st.markdown(st.session_state.question_context)
     
-    # Dynamic notebook structure built as a single block
+    # Study Notebook dynamic compilation block
     insight_count = len(st.session_state.insights)
     notebook_html = f"""
     <div class="notebook-wrapper">
@@ -530,7 +526,6 @@ with col_workspace:
             rendered_steps.add(step_key)
             
             formula = insight.get('formula') or ""
-            # Fallback format checking if standard result formatting isn't explicitly defined in database
             description = insight.get('description') or insight.get('desc') or f"Successfully verified: {insight.get('theorem', 'Concept')}. Calculated result quantity matches ground truth value: {insight.get('result', 'N/A')}."
             
             notebook_html += f"""
@@ -546,14 +541,14 @@ with col_workspace:
 
 
 # ==========================================
-# COLUMN 3: STRUCTURAL SEPARATOR GUTTER (8% width) - Completely Empty
+# COLUMN 3: STRUCTURAL SEPARATOR GUTTER (8% width)
 # ==========================================
 with col_spacer:
     pass
 
 
 # ==========================================
-# COLUMN 4: SOCRATIC SIDEBAR DIALOGUE (25% width) - Typical Chat Interface
+# COLUMN 4: SOCRATIC SIDEBAR DIALOGUE (25% width)
 # ==========================================
 with col_chat:
     st.markdown('<div class="chat-title-area"><span class="chat-section-label">Dialogue Assistant</span></div>', unsafe_allow_html=True)
@@ -572,7 +567,7 @@ with col_chat:
             </div>
             """, unsafe_allow_html=True)
             
-    # Minimal Chat Input pinned at base
+    # Minimal Chat Input pinned at the base
     user_input = st.chat_input("Ask a question...")
     
     if user_input:
