@@ -12,7 +12,7 @@ st.set_page_config(
 )
 
 # SINGLE-CONTAINER ROUTING:
-# Streamlit connects directly to FastAPI internally on Port 8000 (verified by logs).
+# Streamlit connects directly to FastAPI internally on Port 8000.
 BACKEND_URL = "http://127.0.0.1:8000"
 
 # --- STATE MANAGEMENT & RECOVERY ---
@@ -78,7 +78,6 @@ def init_session(q_id: str):
                 st.error(f"Internal initialization failed (Status {res.status_code}).")
                 st.stop()
         except requests.exceptions.ConnectionError:
-            # If the backend is still loading, wait 2 seconds and retry
             if attempt < max_retries - 1:
                 st.warning(f"Connecting to physics tutor engine... (Attempt {attempt + 1}/{max_retries})")
                 time.sleep(2)
@@ -100,6 +99,7 @@ def navigate(direction: str):
             next_q_id = res.json().get("question_id")
             if next_q_id:
                 init_session(next_q_id)
+                st.rerun()
         else:
             st.error("Navigation failed: Unable to fetch next problem state from GCP API.")
     except Exception as e:
@@ -127,29 +127,47 @@ st.markdown(textwrap.dedent("""
   header, footer, #MainMenu { display: none !important; }
   .block-container { padding: 1.5rem 0rem !important; max-width: 100% !important; }
 
-  /* Premium Top Navigation Bar */
-  .top-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  /* Premium Top Navigation Bar Container */
+  .top-bar-container {
     border-bottom: 1px solid #F0F0F2;
-    padding-bottom: 0.8rem;
+    padding-bottom: 0.5rem;
     margin-bottom: 2rem;
-    margin-left: 7%;
-    margin-right: 20%;
+    padding-left: 7%;
+    padding-right: 20%;
   }
+
   .top-bar-title {
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: #1D1D1F;
+    margin-top: 6px;
   }
+
+  .top-bar-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .problem-indicator {
+    font-family: Georgia, "Times New Roman", serif;
+    font-style: italic;
+    font-size: 0.9rem;
+    border-bottom: 1px solid #1D1D1F;
+    color: #1D1D1F;
+    padding-bottom: 2px;
+  }
+
   .top-bar-date {
     font-size: 0.72rem;
     font-weight: 500;
     color: #86868B;
     letter-spacing: 0.05em;
+    text-align: right;
+    margin-top: 6px;
   }
 
   /* Left Panel Workspace Typography and Tags */
@@ -277,6 +295,22 @@ st.markdown(textwrap.dedent("""
     padding: 0 !important;
     margin-bottom: 1.5rem !important;
   }
+
+  /* Flat, un-bordered navigation button styling */
+  div.stButton > button {
+    border: none !important;
+    background-color: transparent !important;
+    color: #86868B !important;
+    font-family: -apple-system, sans-serif !important;
+    font-size: 0.85rem !important;
+    font-weight: 500 !important;
+    padding: 0px !important;
+    transition: color 0.2s ease;
+  }
+  div.stButton > button:hover {
+    color: #1D1D1F !important;
+    background-color: transparent !important;
+  }
   
   /* Clean editorial input overrides */
   [data-testid="stChatInput"] {
@@ -289,18 +323,33 @@ st.markdown(textwrap.dedent("""
 """), unsafe_allow_html=True)
 
 
-# --- IV. TOP BAR HEADER ---
-time_str = dt.now().strftime("%b %d · %I:%M %p").upper()
-st.markdown(f"""
-<div class="top-bar">
-    <div class="top-bar-title">Physics Tutor</div>
-    <div class="top-bar-date">{time_str}</div>
-</div>
-""", unsafe_allow_html=True)
+# --- VI. NATIVE EDITORIAL HEADER WITH WORKSPACE NAVIGATION ---
+st.markdown('<div class="top-bar-container">', unsafe_allow_html=True)
+h_col_left, h_col_center, h_col_right = st.columns([2, 5, 2])
+
+with h_col_left:
+    st.markdown('<div class="top-bar-title">PHYSICS TUTOR</div>', unsafe_allow_html=True)
+
+with h_col_center:
+    # Renders active navigation links matching your target layout
+    st.markdown('<div class="top-bar-center">', unsafe_allow_html=True)
+    nav_col1, nav_col2, nav_col3 = st.columns([1, 2, 1])
+    with nav_col1:
+        st.button("Prev", on_click=lambda: navigate("prev"))
+    with nav_col2:
+        st.markdown(f'<div style="text-align: center;"><span class="problem-indicator">cal_problem_{st.session_state.current_question_id}</span></div>', unsafe_allow_html=True)
+    with nav_col3:
+        st.button("Next", on_click=lambda: navigate("next"))
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with h_col_right:
+    time_str = dt.now().strftime("%b %d · %I:%M %p").upper()
+    st.markdown(f'<div class="top-bar-date">{time_str}</div>', unsafe_allow_html=True)
+
+st.markdown('</div>', unsafe_allow_html=True)
 
 
-# --- V. EXACT HORIZONTAL GRID LAYOUT ---
-# 7% Space | 65% Workspace | 8% Space | 20% Tutor Chat
+# --- VII. EXACT HORIZONTAL GRID LAYOUT ---
 col_space1, col_workspace, col_space2, col_chat = st.columns([0.07, 0.65, 0.08, 0.20])
 
 
