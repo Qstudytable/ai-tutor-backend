@@ -430,21 +430,21 @@ st.markdown("""
 
 
 # --- X. THE 7% / 60% / 8% / 25% HORIZONTAL MATRIX GRID ---
-col_nav, col_workspace, col_spacer, col_chat = st.columns([0.07, 0.60, 0.08, 0.25])
+col_nav, col_workspace, col_spacer, col_chat = st.columns([0.09, 0.60, 0.06, 0.25])
 
 
 # ==========================================
 # COLUMN 1: NAVIGATION ASIDE (7% width)
 # ==========================================
 with col_nav:
-    st.markdown('<div class="sidebar-meta">Electromagnetic Induction</div>', unsafe_allow_html=True)
+    #st.markdown('<div class="sidebar-meta">Electromagnetic Induction</div>', unsafe_allow_html=True)
     
     # Flat action navigators
-    nav_link_col1, nav_link_col2 = st.columns([1, 1])
-    with nav_link_col1:
-        st.button("Prev", on_click=lambda: navigate("prev"))
-    with nav_link_col2:
-        st.button("Next", on_click=lambda: navigate("next"))
+    #nav_link_col1, nav_link_col2 = st.columns([1, 1])
+   # with nav_link_col1:
+   #     st.button("Prev", on_click=lambda: navigate("prev"))
+    #with nav_link_col2:
+     #   st.button("Next", on_click=lambda: navigate("next"))
         
     st.markdown(f'<div class="page-indicator">0{st.session_state.current_question_id[-1] if st.session_state.current_question_id[-1].isdigit() else "1"}/04</div>', unsafe_allow_html=True)
 
@@ -454,7 +454,7 @@ with col_nav:
 # ==========================================
 with col_workspace:
     st.markdown(f'<div class="problem-meta">Problem Unit {st.session_state.current_question_id}</div>', unsafe_allow_html=True)
-    st.markdown('<h1 class="problem-title">Maximum Induced Electromotive Force in a Rotating Coil</h1>', unsafe_allow_html=True)
+    #st.markdown(f'<h1 class="problem-title">Maximum Induced Electromotive Force in a Rotating Coil</h1>', unsafe_allow_html=True)
     
     # Problem text output
     st.markdown(st.session_state.question_context)
@@ -467,6 +467,7 @@ with col_workspace:
             <span>Active Study Notebook</span>
             <span>{insight_count} Unlocked Insights</span>
         </div>
+    </div>
     """
     
     if not st.session_state.insights:
@@ -533,7 +534,7 @@ with col_chat:
             </div>
             """, unsafe_allow_html=True)
             
-            status_placeholder = st.markdown('<div class="status-indicator">Socrates is processing...</div>', unsafe_allow_html=True)
+            status_placeholder = st.markdown('<div class="status-indicator">Thinking...</div>', unsafe_allow_html=True)
             
             try:
                 base_url = BACKEND_URL.rstrip("/")
