@@ -6,8 +6,8 @@ import textwrap
 
 # --- GLOBAL LAYOUT CONFIGURATION ---
 st.set_page_config(
-    layout="wide", 
-    initial_sidebar_state="collapsed", 
+    layout="wide",
+    initial_sidebar_state="collapsed",
     page_title="Physics Tutor"
 )
 
@@ -22,7 +22,7 @@ if "current_question_id" not in st.session_state:
     st.session_state.current_question_id = "00899"
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [
-        {"role": "assistant", "content": "Welcome. I'm ready to help you work through this physics problem. Where would you like to start?"}
+        {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
     ]
 if "insights" not in st.session_state:
     st.session_state.insights = []
@@ -34,13 +34,16 @@ if "question_topic" not in st.session_state:
     st.session_state.question_topic = "Classical Mechanics"
 if "tutoring_mode" not in st.session_state:
     st.session_state.tutoring_mode = "Active — Socratic Mode"
+# NEW: active concept state
+if "active_concept" not in st.session_state:
+    st.session_state.active_concept = ""
 
 
 def extract_dynamic_metadata(data: dict):
     """Dynamically parses API payload or question markdown content to prevent topic mismatch."""
     topic = data.get("topic") or data.get("subject") or data.get("category")
     title = data.get("title") or data.get("question_name")
-    
+
     # Fallback to smart parsing if API does not supply metadata keys
     if not topic:
         context_lower = st.session_state.question_context.lower()
@@ -50,12 +53,15 @@ def extract_dynamic_metadata(data: dict):
             topic = "Electromagnetism"
         else:
             topic = "General Physics"
-            
+
     if not title:
         title = f"Problem Unit {st.session_state.current_question_id}"
-        
+
     st.session_state.question_topic = topic
     st.session_state.question_title = title
+
+    # FIX: Extract active_concept from API payload
+    st.session_state.active_concept = data.get("active_concept") or data.get("concept") or ""
 
 
 def sync_session_snapshot(session_id: str):
@@ -69,7 +75,7 @@ def sync_session_snapshot(session_id: str):
             st.session_state.insights = data.get("notebook_history") or []
             mode = data.get("tutoring_mode", "socratic")
             st.session_state.tutoring_mode = "Active — Socratic Mode" if mode == "socratic" else "Active — Direct Mode"
-            
+
             extract_dynamic_metadata(data)
         else:
             st.error(f"Failed to synchronize workspace state. Server returned code {res.status_code}.")
@@ -83,7 +89,7 @@ def init_session(q_id: str):
     """Initializes session on Port 8000. Safely handles container warmups."""
     base_url = BACKEND_URL.rstrip("/")
     url = f"{base_url}/session/start/{q_id.strip()}"
-    
+
     max_retries = 10
     for attempt in range(max_retries):
         try:
@@ -98,7 +104,7 @@ def init_session(q_id: str):
                 ]
                 st.session_state.insights = []
                 st.session_state.tutoring_mode = "Active — Socratic Mode"
-                
+
                 extract_dynamic_metadata(data)
                 return
             else:
@@ -157,7 +163,7 @@ st.markdown(textwrap.dedent("""
     font-family: 'Plus Jakarta Sans', sans-serif !important;
     -webkit-font-smoothing: antialiased;
   }
-  
+
   /* Strip Streamlit system elements */
   header, footer, #MainMenu { display: none !important; }
   .block-container { padding: 0 !important; max-width: 100% !important; }
@@ -183,16 +189,9 @@ st.markdown(textwrap.dedent("""
     color: #121212;
   }
 
-  .header-actions {
-    display: flex;
-    gap: 2rem;
-    align-items: center;
-  }
-
-  .action-link {
+  .header-timestamp {
     font-size: 11px;
     color: #5A5A57;
-    text-decoration: none;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-weight: 500;
@@ -303,11 +302,36 @@ st.markdown(textwrap.dedent("""
     font-family: KaTeX_Main, 'Times New Roman', serif !important;
   }
 
+  /* FIX: Active Concept callout block */
+  .active-concept-block {
+    border-left: 2px solid #121212;
+    padding: 1rem 1.25rem;
+    margin: 2rem 0 2.5rem 0;
+    background-color: #FAFAF9;
+  }
+
+  .active-concept-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #90908C;
+    margin-bottom: 0.6rem;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+
+  .active-concept-text {
+    font-family: 'EB Garamond', serif;
+    font-size: 16px;
+    line-height: 1.8;
+    color: #121212;
+    margin: 0;
+  }
+
   /* Study Notebook Elements */
   .notebook-wrapper {
-    margin-top: 3rem;
+    margin-top: 4rem;
     border-top: 1px solid #EAE8E3;
-    padding-top: 2rem;
+    padding-top: 2.5rem;
   }
 
   .notebook-label {
@@ -341,9 +365,10 @@ st.markdown(textwrap.dedent("""
   }
 
   .notebook-placeholder-text {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 12px;
-    color: #5A5A57;
+    font-family: 'EB Garamond', serif;
+    font-style: italic;
+    font-size: 14px;
+    color: #90908C;
   }
 
   .notebook-formula {
@@ -384,6 +409,7 @@ st.markdown(textwrap.dedent("""
     letter-spacing: 0.05em;
     color: #90908C;
     margin-bottom: 0.4rem;
+    font-family: 'Plus Jakarta Sans', sans-serif;
   }
 
   .msg-content-text {
@@ -457,15 +483,12 @@ st.markdown(textwrap.dedent("""
 """), unsafe_allow_html=True)
 
 
-# --- THE COMPILER HEADER ---
-st.markdown("""
+# --- FIX: HEADER with "PHYSICS TUTOR" brand and live timestamp on the right ---
+now_str = dt.now().strftime("%b %d · %I:%M %p").upper()
+st.markdown(f"""
 <header class="top-header">
-    <div class="brand">Socrates Workspace</div>
-    <div class="header-actions">
-        <a href="#" class="action-link">Index</a>
-        <a href="#" class="action-link">Uploads</a>
-        <a href="#" class="action-link">Exit Workspace</a>
-    </div>
+    <div class="brand">Physics Tutor</div>
+    <div class="header-timestamp">{now_str}</div>
 </header>
 """, unsafe_allow_html=True)
 
@@ -480,14 +503,14 @@ col_nav, col_workspace, col_spacer, col_chat = st.columns([0.07, 0.60, 0.08, 0.2
 with col_nav:
     # Render the dynamic topic metadata in vertical-rl mode
     st.markdown(f'<div class="sidebar-meta">{st.session_state.question_topic}</div>', unsafe_allow_html=True)
-    
+
     # Flat action navigators
     nav_link_col1, nav_link_col2 = st.columns([1, 1])
     with nav_link_col1:
         st.button("Prev", on_click=lambda: navigate("prev"))
     with nav_link_col2:
         st.button("Next", on_click=lambda: navigate("next"))
-        
+
     st.markdown(f'<div class="page-indicator">ID {st.session_state.current_question_id}</div>', unsafe_allow_html=True)
 
 
@@ -495,26 +518,45 @@ with col_nav:
 # COLUMN 2: PROBLEM WORKSPACE SHEET (60% width)
 # ==========================================
 with col_workspace:
-    st.markdown(f'<div class="problem-meta">Problem Unit {st.session_state.current_question_id}</div>', unsafe_allow_html=True)
-    st.markdown(f'<h1 class="problem-title">{st.session_state.question_title}</h1>', unsafe_allow_html=True)
-    
+    # FIX: Use question_topic for the meta label to match screenshot ("CLASS 12 · ELECTROMAGNETIC INDUCTION" style)
+    st.markdown(
+        f'<div class="problem-meta">Problem Unit {st.session_state.current_question_id}</div>',
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        f'<h1 class="problem-title">Problem {st.session_state.current_question_id}</h1>',
+        unsafe_allow_html=True
+    )
+
     # Problem text output
     st.markdown(st.session_state.question_context)
-    
+
+    # FIX: Active Concept block — restored and placed immediately after problem text
+    if st.session_state.active_concept:
+        st.markdown(clean_html(f"""
+        <div class="active-concept-block">
+            <div class="active-concept-label">Active Concept</div>
+            <p class="active-concept-text">{st.session_state.active_concept}</p>
+        </div>
+        """), unsafe_allow_html=True)
+
+    # FIX: Explicit vertical spacer to keep notebook properly separated
+    st.markdown('<div style="height: 1.5rem;"></div>', unsafe_allow_html=True)
+
     # Study Notebook dynamic compilation block
     insight_count = len(st.session_state.insights)
     notebook_html = f"""
     <div class="notebook-wrapper">
         <div class="notebook-label">
-            <span>Active Study Notebook</span>
-            <span>{insight_count} Unlocked Insights</span>
+            <span>Study Notebook</span>
+            <span>{insight_count} Insight{'s' if insight_count != 1 else ''} Recorded</span>
         </div>
     """
-    
+
     if not st.session_state.insights:
         notebook_html += """
         <div class="notebook-placeholder-box">
-            <div class="notebook-placeholder-text">No insights recorded yet. Solve steps in the chat to populate this area.</div>
+            <div class="notebook-placeholder-text">Awaiting formulas and insights from chat...</div>
         </div>
         """
     else:
@@ -524,18 +566,24 @@ with col_workspace:
             if step_key in rendered_steps:
                 continue
             rendered_steps.add(step_key)
-            
+
             formula = insight.get('formula') or ""
-            description = insight.get('description') or insight.get('desc') or f"Successfully verified: {insight.get('theorem', 'Concept')}. Calculated result quantity matches ground truth value: {insight.get('result', 'N/A')}."
-            
+            description = (
+                insight.get('description')
+                or insight.get('desc')
+                or f"Successfully verified: {insight.get('theorem', 'Concept')}. "
+                   f"Calculated result quantity matches ground truth value: {insight.get('result', 'N/A')}."
+            )
+
             notebook_html += f"""
             <div class="notebook-canvas">
                 <div class="notebook-formula">{formula}</div>
                 <div class="notebook-desc">{description}</div>
             </div>
             """
+
     notebook_html += "</div>"
-    
+
     # Output notebook cleanly without leading spaces
     st.markdown(clean_html(notebook_html), unsafe_allow_html=True)
 
@@ -551,11 +599,16 @@ with col_spacer:
 # COLUMN 4: SOCRATIC SIDEBAR DIALOGUE (25% width)
 # ==========================================
 with col_chat:
-    st.markdown('<div class="chat-title-area"><span class="chat-section-label">Dialogue Assistant</span></div>', unsafe_allow_html=True)
-    
+    # FIX: Derive chat panel label from tutoring_mode, matching screenshot ("SOCRATIC MODE")
+    mode_label = st.session_state.tutoring_mode.replace("Active — ", "").upper()
+    st.markdown(
+        f'<div class="chat-title-area"><span class="chat-section-label">{mode_label}</span></div>',
+        unsafe_allow_html=True
+    )
+
     # Height-locked conversational viewport
     chat_container = st.container(height=450, border=False)
-    
+
     with chat_container:
         for msg in st.session_state.chat_history:
             sender = "Socrates" if msg["role"] in ["assistant", "tutor"] else "You"
@@ -566,13 +619,13 @@ with col_chat:
                 <div class="msg-content-text">{msg["content"]}</div>
             </div>
             """, unsafe_allow_html=True)
-            
+
     # Minimal Chat Input pinned at the base
-    user_input = st.chat_input("Ask a question...")
-    
+    user_input = st.chat_input("Type logic or formula...")
+
     if user_input:
         st.session_state.chat_history.append({"role": "user", "content": user_input})
-        
+
         with chat_container:
             st.markdown(f"""
             <div class="msg-wrapper">
@@ -580,9 +633,12 @@ with col_chat:
                 <div class="msg-content-text">{user_input}</div>
             </div>
             """, unsafe_allow_html=True)
-            
-            status_placeholder = st.markdown('<div class="status-indicator">Socrates is processing...</div>', unsafe_allow_html=True)
-            
+
+            status_placeholder = st.markdown(
+                '<div class="status-indicator">Analyzing physics principles...</div>',
+                unsafe_allow_html=True
+            )
+
             try:
                 base_url = BACKEND_URL.rstrip("/")
                 response = requests.post(
@@ -591,14 +647,16 @@ with col_chat:
                     timeout=15
                 )
                 status_placeholder.empty()
-                
+
                 if response.status_code == 200:
                     data = response.json()
                     ai_response = data.get("ai_response", "I'm having trouble analyzing this step.")
-                    
+
                     backend_mode = data.get("phase", "SOCRATIC")
-                    st.session_state.tutoring_mode = "Active — Socratic Mode" if backend_mode == "SOCRATIC" else "Active — Direct Mode"
-                    
+                    st.session_state.tutoring_mode = (
+                        "Active — Socratic Mode" if backend_mode == "SOCRATIC" else "Active — Direct Mode"
+                    )
+
                     nb_updates = data.get("notebook_updates", {})
                     if nb_updates and nb_updates.get("official_solution"):
                         st.session_state.insights.append(nb_updates["official_solution"])
@@ -606,14 +664,14 @@ with col_chat:
                     ai_response = f"GCP Engine Error: code {response.status_code}."
             except Exception as e:
                 status_placeholder.empty()
-                ai_response = f"GCP Synchronizer Error: unable to connect to API gateway."
-            
+                ai_response = "GCP Synchronizer Error: unable to connect to API gateway."
+
             st.markdown(f"""
             <div class="msg-wrapper system">
                 <div class="msg-sender-label">Socrates</div>
                 <div class="msg-content-text">{ai_response}</div>
             </div>
             """, unsafe_allow_html=True)
-            
+
         st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
         st.rerun()
