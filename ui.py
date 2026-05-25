@@ -11,11 +11,9 @@ st.set_page_config(
     page_title="Physics Tutor"
 )
 
-# SINGLE-CONTAINER ROUTING:
-# Streamlit connects directly to FastAPI internally on Port 8000.
 BACKEND_URL = "http://127.0.0.1:8000"
 
-# --- STATE MANAGEMENT & RECOVERY ---
+# --- STATE MANAGEMENT ---
 if "session_id" not in st.session_state:
     st.session_state.session_id = None
 if "current_question_id" not in st.session_state:
@@ -34,17 +32,13 @@ if "question_topic" not in st.session_state:
     st.session_state.question_topic = "Classical Mechanics"
 if "tutoring_mode" not in st.session_state:
     st.session_state.tutoring_mode = "Active — Socratic Mode"
-# NEW: active concept state
 if "active_concept" not in st.session_state:
     st.session_state.active_concept = ""
 
 
 def extract_dynamic_metadata(data: dict):
-    """Dynamically parses API payload or question markdown content to prevent topic mismatch."""
     topic = data.get("topic") or data.get("subject") or data.get("category")
     title = data.get("title") or data.get("question_name")
-
-    # Fallback to smart parsing if API does not supply metadata keys
     if not topic:
         context_lower = st.session_state.question_context.lower()
         if "collides" in context_lower or "velocity" in context_lower or "mass" in context_lower:
@@ -53,19 +47,14 @@ def extract_dynamic_metadata(data: dict):
             topic = "Electromagnetism"
         else:
             topic = "General Physics"
-
     if not title:
-        title = f"Problem Unit {st.session_state.current_question_id}"
-
+        title = f"Problem {st.session_state.current_question_id}"
     st.session_state.question_topic = topic
     st.session_state.question_title = title
-
-    # FIX: Extract active_concept from API payload
     st.session_state.active_concept = data.get("active_concept") or data.get("concept") or ""
 
 
 def sync_session_snapshot(session_id: str):
-    """Syncs session state dynamically from backend."""
     try:
         base_url = BACKEND_URL.rstrip("/")
         res = requests.get(f"{base_url}/session/{session_id}", timeout=5)
@@ -75,7 +64,6 @@ def sync_session_snapshot(session_id: str):
             st.session_state.insights = data.get("notebook_history") or []
             mode = data.get("tutoring_mode", "socratic")
             st.session_state.tutoring_mode = "Active — Socratic Mode" if mode == "socratic" else "Active — Direct Mode"
-
             extract_dynamic_metadata(data)
         else:
             st.error(f"Failed to synchronize workspace state. Server returned code {res.status_code}.")
@@ -86,10 +74,8 @@ def sync_session_snapshot(session_id: str):
 
 
 def init_session(q_id: str):
-    """Initializes session on Port 8000. Safely handles container warmups."""
     base_url = BACKEND_URL.rstrip("/")
     url = f"{base_url}/session/start/{q_id.strip()}"
-
     max_retries = 10
     for attempt in range(max_retries):
         try:
@@ -104,7 +90,6 @@ def init_session(q_id: str):
                 ]
                 st.session_state.insights = []
                 st.session_state.tutoring_mode = "Active — Socratic Mode"
-
                 extract_dynamic_metadata(data)
                 return
             else:
@@ -133,7 +118,7 @@ def navigate(direction: str):
                 init_session(next_q_id)
                 st.rerun()
         else:
-            st.error("Navigation failed: Unable to fetch next problem state from GCP API.")
+            st.error("Navigation failed.")
     except Exception as e:
         st.error(f"Internal navigation failed: {e}")
 
@@ -146,30 +131,31 @@ else:
 
 
 def clean_html(html_str: str) -> str:
-    """Removes leading spaces from all lines so markdown won't parse it as an indented code block."""
     return "\n".join(line.strip() for line in html_str.strip().split("\n"))
 
 
-# --- EDITORIAL SYSTEM STYLING ---
-st.markdown(textwrap.dedent("""
+# ============================================================
+# GLOBAL CSS
+# ============================================================
+st.markdown("""
 <style>
-  /* Import Google Fonts directly */
-  @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap');
 
-  /* Base premium minimalist setup - FORCED PURE WHITE GLOBALLY */
-  html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"], .main, .block-container, [data-testid="stVerticalBlock"] {
+html, body,
+[data-testid="stAppViewContainer"],
+[data-testid="stApp"],
+.main, .block-container,
+[data-testid="stVerticalBlock"] {
     background-color: #FFFFFF !important;
     color: #121212 !important;
     font-family: 'Plus Jakarta Sans', sans-serif !important;
     -webkit-font-smoothing: antialiased;
-  }
+}
 
-  /* Strip Streamlit system elements */
-  header, footer, #MainMenu { display: none !important; }
-  .block-container { padding: 0 !important; max-width: 100% !important; }
+header[data-testid="stHeader"], footer, #MainMenu { display: none !important; }
+.block-container { padding: 0 !important; max-width: 100% !important; }
 
-  /* Premium Header Navigation Bar */
-  .top-header {
+.ws-header {
     background-color: #FFFFFF;
     border-bottom: 1px solid #EAE8E3;
     padding: 0 4%;
@@ -179,26 +165,75 @@ st.markdown(textwrap.dedent("""
     height: 64px;
     width: 100%;
     box-sizing: border-box;
-  }
-
-  .brand {
+}
+.ws-brand {
     font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.15em;
+    font-weight: 600;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
     color: #121212;
-  }
-
-  .header-timestamp {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.ws-timestamp {
     font-size: 11px;
     color: #5A5A57;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.1em;
     font-weight: 500;
-  }
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
 
-  /* Custom flat link behavior for native Streamlit buttons */
-  div.stButton > button {
+[data-testid="column"]:nth-of-type(1) {
+    border-right: 1px solid #EAE8E3;
+    height: calc(100vh - 64px);
+    padding: 2.5rem 0.5rem !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #FFFFFF;
+    overflow: hidden;
+}
+[data-testid="column"]:nth-of-type(2) {
+    padding: 3.5rem 5% !important;
+    overflow-y: auto;
+    background-color: #FFFFFF;
+    height: calc(100vh - 64px);
+}
+[data-testid="column"]:nth-of-type(3) {
+    background-color: #FFFFFF;
+    border-right: 1px solid #EAE8E3;
+    height: calc(100vh - 64px);
+}
+[data-testid="column"]:nth-of-type(4) {
+    padding: 2.5rem 1.75rem !important;
+    background-color: #FFFFFF;
+    height: calc(100vh - 64px);
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-topic {
+    font-size: 9px;
+    color: #90908C;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    flex: 1;
+    text-align: center;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.sidebar-id {
+    font-size: 10px;
+    color: #5A5A57;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-align: center;
+    margin-top: 0.75rem;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+div.stButton > button {
     border: none !important;
     background-color: transparent !important;
     color: #5A5A57 !important;
@@ -206,332 +241,283 @@ st.markdown(textwrap.dedent("""
     font-size: 10px !important;
     font-weight: 600 !important;
     text-transform: uppercase !important;
-    letter-spacing: 0.08em !important;
-    padding: 0px !important;
-    transition: color 0.2s ease;
+    letter-spacing: 0.1em !important;
+    padding: 0.25rem 0.1rem !important;
     line-height: 1 !important;
     height: auto !important;
+    min-height: unset !important;
     white-space: nowrap !important;
-    word-break: keep-all !important;
     width: 100% !important;
-    min-width: unset !important;
-  }
-  div.stButton > button:hover {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+div.stButton > button:hover {
     color: #121212 !important;
     background-color: transparent !important;
-  }
+    border: none !important;
+    box-shadow: none !important;
+}
+div.stButton > button:focus,
+div.stButton > button:active {
+    box-shadow: none !important;
+    border: none !important;
+    outline: none !important;
+}
 
-  /* Target Streamlit Columns directly for perfect 7-60-8-25 container rendering */
-  [data-testid="column"]:nth-of-type(1) {
-    border-right: 1px solid #EAE8E3;
-    height: calc(100vh - 64px);
-    padding: 3rem 0.5rem !important;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    background-color: #FFFFFF;
-    overflow: hidden;
-  }
-
-  [data-testid="column"]:nth-of-type(2) {
-    padding: 4rem 5% !important;
-    overflow-y: auto !important;
-    background-color: #FFFFFF;
-    height: calc(100vh - 64px);
-  }
-
-  [data-testid="column"]:nth-of-type(3) {
-    background-color: #FFFFFF;
-    border-right: 1px solid #EAE8E3;
-    height: calc(100vh - 64px);
-  }
-
-  [data-testid="column"]:nth-of-type(4) {
-    padding: 2.5rem 1.75rem !important;
-    background-color: #FFFFFF;
-    height: calc(100vh - 64px);
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-  }
-
-  .sidebar-meta {
-    font-size: 10px;
-    color: #90908C;
+.problem-meta-label {
+    font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    writing-mode: vertical-rl;
-    transform: rotate(180deg);
-    align-self: center;
-    margin-bottom: auto;
-  }
-
-  .page-indicator {
-    font-size: 11px;
-    color: #5A5A57;
-    text-align: center;
-    margin-top: 1rem;
+    color: #90908C;
+    margin-bottom: 1rem;
     font-family: 'Plus Jakarta Sans', sans-serif;
-  }
+}
+.problem-heading {
+    font-family: 'EB Garamond', Georgia, serif !important;
+    font-size: 2.2rem !important;
+    font-weight: 400 !important;
+    line-height: 1.2 !important;
+    color: #121212 !important;
+    letter-spacing: -0.01em !important;
+    margin: 0 0 1.75rem 0 !important;
+}
 
-  .problem-meta {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: #90908C;
-    margin-bottom: 1.25rem;
-  }
+[data-testid="column"]:nth-of-type(2) h1,
+[data-testid="column"]:nth-of-type(2) h2 {
+    font-family: 'EB Garamond', Georgia, serif !important;
+    font-weight: 400 !important;
+    color: #121212 !important;
+}
 
-  .problem-title {
-    font-family: 'EB Garamond', serif;
-    font-size: 1.8rem;
-    font-weight: 400;
-    margin-bottom: 1.5rem;
-    color: #121212;
-    letter-spacing: -0.01em;
-  }
-
-  /* Protect KaTeX syntax from Garamond override */
-  .stMarkdown p {
+.stMarkdown p {
     font-family: 'EB Garamond', serif !important;
     font-size: 16px !important;
-    line-height: 1.8 !important;
+    line-height: 1.85 !important;
     color: #121212 !important;
-  }
-  .stMarkdown p .katex, .stMarkdown p .katex * {
+}
+.stMarkdown p .katex,
+.stMarkdown p .katex * {
     font-family: KaTeX_Main, 'Times New Roman', serif !important;
-  }
+}
 
-  /* FIX: Active Concept callout block */
-  .active-concept-block {
+.active-concept-block {
     border-left: 2px solid #121212;
-    padding: 1rem 1.25rem;
+    padding: 0.85rem 1.25rem;
     margin: 2rem 0 2.5rem 0;
     background-color: #FAFAF9;
-  }
-
-  .active-concept-label {
+}
+.active-concept-label {
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.12em;
     color: #90908C;
-    margin-bottom: 0.6rem;
+    margin-bottom: 0.5rem;
     font-family: 'Plus Jakarta Sans', sans-serif;
-  }
-
-  .active-concept-text {
+}
+.active-concept-text {
     font-family: 'EB Garamond', serif;
     font-size: 16px;
     line-height: 1.8;
     color: #121212;
     margin: 0;
-  }
+}
 
-  /* Study Notebook Elements */
-  .notebook-wrapper {
-    margin-top: 4rem;
+.notebook-wrapper {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
     border-top: 1px solid #EAE8E3;
-    padding-top: 2.5rem;
-  }
-
-  .notebook-label {
+}
+.notebook-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 1.25rem;
+}
+.notebook-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #5A5A57;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.notebook-count {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: #5A5A57;
-    margin-bottom: 1rem;
-    display: flex;
-    justify-content: space-between;
-  }
-
-  .notebook-canvas {
-    background-color: #FFFFFF;
-    border: 1.5px solid #121212 !important;
-    border-radius: 6px;
-    padding: 1.5rem 2rem;
-    min-height: 120px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    margin-bottom: 1rem;
-  }
-
-  .notebook-placeholder-box {
-    border: 1px solid #EAE8E3;
-    border-radius: 6px;
-    padding: 2.5rem 1.5rem;
+    color: #90908C;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.notebook-placeholder-box {
+    border: 1px solid #DEDAD5;
+    border-radius: 8px;
+    padding: 3rem 1.5rem;
     text-align: center;
     background-color: #FAFAF9;
-  }
-
-  .notebook-placeholder-text {
+    min-height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.notebook-placeholder-text {
     font-family: 'EB Garamond', serif;
     font-style: italic;
-    font-size: 14px;
+    font-size: 15px;
     color: #90908C;
-  }
-
-  .notebook-formula {
+}
+.notebook-canvas {
+    border: 1.5px solid #121212;
+    border-radius: 6px;
+    padding: 1.5rem 2rem;
+    min-height: 100px;
+    margin-bottom: 1rem;
+    background: #FFFFFF;
+}
+.notebook-formula {
     font-family: 'EB Garamond', serif;
     font-size: 18px;
-    color: #121212;
     font-weight: 500;
-    margin-bottom: 0.5rem;
-  }
-
-  .notebook-desc {
+    color: #121212;
+    margin-bottom: 0.4rem;
+}
+.notebook-desc {
     font-family: 'Plus Jakarta Sans', sans-serif;
     font-size: 12px;
     color: #5A5A57;
     line-height: 1.5;
-  }
+}
 
-  .chat-title-area {
-    margin-bottom: 1.5rem;
-  }
-
-  .chat-section-label {
+.chat-mode-label {
     font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.12em;
     color: #90908C;
-  }
-
-  /* Chat design configurations */
-  .msg-wrapper {
-    margin-bottom: 2rem;
-    text-align: left;
-  }
-
-  .msg-sender-label {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #90908C;
-    margin-bottom: 0.4rem;
     font-family: 'Plus Jakarta Sans', sans-serif;
-  }
-
-  .msg-content-text {
-    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    margin-bottom: 1.5rem;
+    display: block;
+}
+.msg-wrapper { margin-bottom: 1.75rem; }
+.msg-sender-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #90908C;
+    margin-bottom: 0.35rem;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.msg-content-text {
+    font-family: 'Plus Jakarta Sans', sans-serif;
     font-size: 13px;
-    line-height: 1.6;
+    line-height: 1.65;
     color: #121212;
-  }
-
-  .msg-wrapper.system .msg-content-text {
+}
+.msg-wrapper.system .msg-content-text {
     font-family: 'EB Garamond', serif !important;
-    font-size: 14px !important;
-    color: #121212 !important;
+    font-size: 15px !important;
     border-left: 1.5px solid #121212;
-    padding-left: 0.75rem;
-    line-height: 1.6;
-  }
-
-  .status-indicator {
+    padding-left: 0.85rem;
+    line-height: 1.7;
+}
+.status-indicator {
     font-family: 'EB Garamond', serif;
     font-style: italic;
-    color: #5A5A57;
+    color: #90908C;
     font-size: 13px;
-    margin-top: 1rem;
-  }
+    padding-left: 0.85rem;
+    border-left: 1.5px solid #DEDAD5;
+}
 
-  /* Override Streamlit chat formatting elements */
-  div[data-testid="stChatMessage"] {
-    background-color: transparent !important;
+div[data-testid="stChatInput"] > div {
+    background-color: #FFFFFF !important;
+    border: none !important;
+    border-bottom: 1.5px solid #121212 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0.4rem 0 !important;
+}
+div[data-testid="stChatInput"] textarea {
+    background-color: #FFFFFF !important;
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    font-size: 13px !important;
+    color: #121212 !important;
     border: none !important;
     box-shadow: none !important;
     padding: 0 !important;
-    margin-bottom: 1.5rem !important;
-  }
-
-  /* Flat bottom line input styling */
-  [data-testid="stChatInput"] {
-    border: none !important;
-    border-bottom: 1.5px solid #121212 !important;
-    border-radius: 0px !important;
-    background: #FFFFFF !important;
-    padding: 0.2rem 0rem !important;
-  }
-
-  /* Replace Streamlit default round submit icon with flat SEND label */
-  button[data-testid="stChatInputSubmit"] {
+}
+div[data-testid="stChatInput"] textarea::placeholder {
+    color: #AEACA8 !important;
+}
+button[data-testid="stChatInputSubmit"] {
     background: none !important;
     border: none !important;
     font-family: 'Plus Jakarta Sans', sans-serif !important;
-    font-size: 11px !important;
-    font-weight: 600 !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
     text-transform: uppercase !important;
-    letter-spacing: 0.08em !important;
+    letter-spacing: 0.1em !important;
     color: #121212 !important;
+    padding: 0 0 0 1rem !important;
     width: auto !important;
     height: auto !important;
-    padding: 0.5rem 0 0.5rem 1rem !important;
-    transition: opacity 0.15s ease !important;
-  }
-  button[data-testid="stChatInputSubmit"]:hover {
-    opacity: 0.7 !important;
-  }
-  button[data-testid="stChatInputSubmit"] svg {
-    display: none !important;
-  }
-  button[data-testid="stChatInputSubmit"]::after {
-    content: "SEND" !important;
-    display: block !important;
-  }
+    box-shadow: none !important;
+}
+button[data-testid="stChatInputSubmit"]:hover { opacity: 0.55 !important; }
+button[data-testid="stChatInputSubmit"] svg { display: none !important; }
+button[data-testid="stChatInputSubmit"]::after { content: "SEND" !important; display: block !important; }
+
+div[data-testid="stChatMessage"] {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
 </style>
-"""), unsafe_allow_html=True)
-
-
-# --- FIX: HEADER with "PHYSICS TUTOR" brand and live timestamp on the right ---
-now_str = dt.now().strftime("%b %d · %I:%M %p").upper()
-st.markdown(f"""
-<header class="top-header">
-    <div class="brand">Physics Tutor</div>
-    <div class="header-timestamp">{now_str}</div>
-</header>
 """, unsafe_allow_html=True)
 
 
-# --- THE 7% / 60% / 8% / 25% HORIZONTAL MATRIX GRID ---
+# ── HEADER ───────────────────────────────────────────────────
+now_str = dt.now().strftime("%b %-d · %-I:%M %p").upper()
+st.markdown(f"""
+<div class="ws-header">
+    <span class="ws-brand">Physics Tutor</span>
+    <span class="ws-timestamp">{now_str}</span>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ── GRID ─────────────────────────────────────────────────────
 col_nav, col_workspace, col_spacer, col_chat = st.columns([0.07, 0.60, 0.08, 0.25])
 
 
-# ==========================================
-# COLUMN 1: NAVIGATION ASIDE (7% width)
-# ==========================================
+# COLUMN 1: Navigation
 with col_nav:
-    # Render the dynamic topic metadata in vertical-rl mode
-    st.markdown(f'<div class="sidebar-meta">{st.session_state.question_topic}</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="sidebar-topic">{st.session_state.question_topic}</div>',
+        unsafe_allow_html=True
+    )
+    c1, c2 = st.columns(2)
+    with c1:
+        st.button("Prev", key="btn_prev", on_click=lambda: navigate("prev"))
+    with c2:
+        st.button("Next", key="btn_next", on_click=lambda: navigate("next"))
+    st.markdown(
+        f'<div class="sidebar-id">ID {st.session_state.current_question_id}</div>',
+        unsafe_allow_html=True
+    )
 
-    # Flat action navigators
-    nav_link_col1, nav_link_col2 = st.columns([1, 1])
-    with nav_link_col1:
-        st.button("Prev", on_click=lambda: navigate("prev"))
-    with nav_link_col2:
-        st.button("Next", on_click=lambda: navigate("next"))
 
-    st.markdown(f'<div class="page-indicator">ID {st.session_state.current_question_id}</div>', unsafe_allow_html=True)
-
-
-# ==========================================
-# COLUMN 2: PROBLEM WORKSPACE SHEET (60% width)
-# ==========================================
+# COLUMN 2: Problem Workspace
 with col_workspace:
-    # FIX: Use question_topic for the meta label to match screenshot ("CLASS 12 · ELECTROMAGNETIC INDUCTION" style)
     st.markdown(
-        f'<div class="problem-meta">Problem Unit {st.session_state.current_question_id}</div>',
+        f'<div class="problem-meta-label">Problem Unit {st.session_state.current_question_id}</div>',
         unsafe_allow_html=True
     )
     st.markdown(
-        f'<h1 class="problem-title">Problem {st.session_state.current_question_id}</h1>',
+        f'<div class="problem-heading">Problem {st.session_state.current_question_id}</div>',
         unsafe_allow_html=True
     )
-
-    # Problem text output
     st.markdown(st.session_state.question_context)
 
-    # FIX: Active Concept block — restored and placed immediately after problem text
     if st.session_state.active_concept:
         st.markdown(clean_html(f"""
         <div class="active-concept-block">
@@ -540,23 +526,18 @@ with col_workspace:
         </div>
         """), unsafe_allow_html=True)
 
-    # FIX: Explicit vertical spacer to keep notebook properly separated
-    st.markdown('<div style="height: 1.5rem;"></div>', unsafe_allow_html=True)
-
-    # Study Notebook dynamic compilation block
     insight_count = len(st.session_state.insights)
     notebook_html = f"""
     <div class="notebook-wrapper">
-        <div class="notebook-label">
-            <span>Study Notebook</span>
-            <span>{insight_count} Insight{'s' if insight_count != 1 else ''} Recorded</span>
+        <div class="notebook-header-row">
+            <span class="notebook-label">Study Notebook</span>
+            <span class="notebook-count">{insight_count} Insight{"s" if insight_count != 1 else ""} Recorded</span>
         </div>
     """
-
     if not st.session_state.insights:
         notebook_html += """
         <div class="notebook-placeholder-box">
-            <div class="notebook-placeholder-text">Awaiting formulas and insights from chat...</div>
+            <span class="notebook-placeholder-text">Awaiting formulas and insights from chat...</span>
         </div>
         """
     else:
@@ -566,48 +547,32 @@ with col_workspace:
             if step_key in rendered_steps:
                 continue
             rendered_steps.add(step_key)
-
-            formula = insight.get('formula') or ""
+            formula = insight.get("formula") or ""
             description = (
-                insight.get('description')
-                or insight.get('desc')
-                or f"Successfully verified: {insight.get('theorem', 'Concept')}. "
-                   f"Calculated result quantity matches ground truth value: {insight.get('result', 'N/A')}."
+                insight.get("description") or insight.get("desc")
+                or f"Successfully verified: {insight.get('theorem', 'Concept')}. Result: {insight.get('result', 'N/A')}."
             )
-
             notebook_html += f"""
             <div class="notebook-canvas">
                 <div class="notebook-formula">{formula}</div>
                 <div class="notebook-desc">{description}</div>
             </div>
             """
-
     notebook_html += "</div>"
-
-    # Output notebook cleanly without leading spaces
     st.markdown(clean_html(notebook_html), unsafe_allow_html=True)
 
 
-# ==========================================
-# COLUMN 3: STRUCTURAL SEPARATOR GUTTER (8% width)
-# ==========================================
+# COLUMN 3: Gutter
 with col_spacer:
     pass
 
 
-# ==========================================
-# COLUMN 4: SOCRATIC SIDEBAR DIALOGUE (25% width)
-# ==========================================
+# COLUMN 4: Chat
 with col_chat:
-    # FIX: Derive chat panel label from tutoring_mode, matching screenshot ("SOCRATIC MODE")
     mode_label = st.session_state.tutoring_mode.replace("Active — ", "").upper()
-    st.markdown(
-        f'<div class="chat-title-area"><span class="chat-section-label">{mode_label}</span></div>',
-        unsafe_allow_html=True
-    )
+    st.markdown(f'<span class="chat-mode-label">{mode_label}</span>', unsafe_allow_html=True)
 
-    # Height-locked conversational viewport
-    chat_container = st.container(height=450, border=False)
+    chat_container = st.container(height=490, border=False)
 
     with chat_container:
         for msg in st.session_state.chat_history:
@@ -620,12 +585,10 @@ with col_chat:
             </div>
             """, unsafe_allow_html=True)
 
-    # Minimal Chat Input pinned at the base
     user_input = st.chat_input("Type logic or formula...")
 
     if user_input:
         st.session_state.chat_history.append({"role": "user", "content": user_input})
-
         with chat_container:
             st.markdown(f"""
             <div class="msg-wrapper">
@@ -633,12 +596,10 @@ with col_chat:
                 <div class="msg-content-text">{user_input}</div>
             </div>
             """, unsafe_allow_html=True)
-
             status_placeholder = st.markdown(
                 '<div class="status-indicator">Analyzing physics principles...</div>',
                 unsafe_allow_html=True
             )
-
             try:
                 base_url = BACKEND_URL.rstrip("/")
                 response = requests.post(
@@ -647,31 +608,26 @@ with col_chat:
                     timeout=15
                 )
                 status_placeholder.empty()
-
                 if response.status_code == 200:
                     data = response.json()
                     ai_response = data.get("ai_response", "I'm having trouble analyzing this step.")
-
                     backend_mode = data.get("phase", "SOCRATIC")
                     st.session_state.tutoring_mode = (
                         "Active — Socratic Mode" if backend_mode == "SOCRATIC" else "Active — Direct Mode"
                     )
-
                     nb_updates = data.get("notebook_updates", {})
                     if nb_updates and nb_updates.get("official_solution"):
                         st.session_state.insights.append(nb_updates["official_solution"])
                 else:
                     ai_response = f"GCP Engine Error: code {response.status_code}."
-            except Exception as e:
+            except Exception:
                 status_placeholder.empty()
                 ai_response = "GCP Synchronizer Error: unable to connect to API gateway."
-
             st.markdown(f"""
             <div class="msg-wrapper system">
                 <div class="msg-sender-label">Socrates</div>
                 <div class="msg-content-text">{ai_response}</div>
             </div>
             """, unsafe_allow_html=True)
-
         st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
         st.rerun()
