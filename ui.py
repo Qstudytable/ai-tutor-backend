@@ -431,6 +431,7 @@ with col_workspace:
             <span>Active Study Notebook</span>
             <span>{insight_count} Unlocked Insights</span>
         </div>
+    </div>
     """
     
     if not st.session_state.insights:
