@@ -429,6 +429,7 @@ with col_workspace:
         <div class="notebook-label">
             <span>Active Study Notebook</span>
             <span>{insight_count} Unlocked Insights</span>
+            </div>
         </div>
     """
     
