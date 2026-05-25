@@ -431,7 +431,6 @@ with col_workspace:
             <span>Active Study Notebook</span>
             <span>{insight_count} Unlocked Insights</span>
         </div>
-    </div>
     """
     
     if not st.session_state.insights:
@@ -450,7 +449,7 @@ with col_workspace:
             notebook_html += f"""
             <div class="notebook-canvas">
                 <div class="notebook-formula">{insight.get('formula', '')}</div>
-                <div class="notebook-desc">Successfully verified: {insight.get('theorem', 'Concept')}. Calculated result quantity matches ground truth value: {insight.get('result', 'N/A')}.</div>
+                <div class="notebook-desc">Successfully verified: {insight.get('theorem', 'Concept')}. Calculated result quantity matches ground truth value: {insight.get('result', 'N/A')}.
             </div>
             """
     notebook_html += "</div>"
