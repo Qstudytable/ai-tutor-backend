@@ -14,7 +14,7 @@ st.set_page_config(
 # SINGLE-CONTAINER ROUTING
 BACKEND_URL = "http://127.0.0.1:8000"
 
-# --- 1. STATE MANAGEMENT & RECOVERY (Must happen first!) ---
+# --- 1. STATE MANAGEMENT & RECOVERY ---
 if "session_id" not in st.session_state:
     st.session_state.session_id = None
 if "current_question_id" not in st.session_state:
@@ -33,7 +33,7 @@ if "tutoring_mode" not in st.session_state:
 
 # --- 2. RECOVERY WORKSPACE FUNCTIONS ---
 def sync_session_snapshot(session_id: str):
-    """Syncs session state dynamically from backend."""
+    """Syncs session state dynamically from backend when requested."""
     try:
         base_url = BACKEND_URL.rstrip("/")
         res = requests.get(f"{base_url}/session/{session_id}", timeout=5)
@@ -51,7 +51,7 @@ def sync_session_snapshot(session_id: str):
         st.stop()
 
 
-def init_session(q_id: str):
+def init_session(q_id: str, retain_history: bool = False):
     """Initializes session on Port 8000. Safely handles container warmups."""
     base_url = BACKEND_URL.rstrip("/")
     url = f"{base_url}/session/start/{q_id.strip()}"
@@ -65,10 +65,12 @@ def init_session(q_id: str):
                 st.session_state.session_id = data.get("session_id")
                 st.session_state.current_question_id = data.get("question_id")
                 st.session_state.question_context = data.get("context")
-                st.session_state.chat_history = [
-                    {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
-                ]
-                st.session_state.insights = []
+                
+                if not retain_history:
+                    st.session_state.chat_history = [
+                        {"role": "assistant", "content": "Welcome to the workspace. Let's step through this physics problem together. How can I help you resolve the active step?"}
+                    ]
+                    st.session_state.insights = []
                 st.session_state.tutoring_mode = "Active — Socratic Mode"
                 return
             else:
@@ -113,8 +115,6 @@ if "nav_action" in st.query_params:
 # --- 5. INITIALIZATION RUNNER DEPLOYMENT ---
 if st.session_state.session_id is None:
     init_session(st.session_state.current_question_id)
-else:
-    sync_session_snapshot(st.session_state.session_id) 
 
 
 # --- 6. EDITORIAL SYSTEM STYLING ---
@@ -168,26 +168,6 @@ st.markdown(textwrap.dedent("""
     font-weight: 500;
   }
 
-  /* Custom flat link behavior for native Streamlit buttons in header */
-  div.stButton > button {
-    border: none !important;
-    background-color: transparent !important;
-    color: #5A5A57 !important;
-    font-family: 'Plus Jakarta Sans', sans-serif !important;
-    font-size: 11px !important;
-    font-weight: 500 !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.08em !important;
-    padding: 0px !important;
-    transition: color 0.2s ease;
-    line-height: 1 !important;
-    height: auto !important;
-  }
-  div.stButton > button:hover {
-    color: #121212 !important;
-    background-color: transparent !important;
-  }
-
   /* Structural Columns Layout Setup */
   [data-testid="column"]:nth-of-type(1) {
     border-right: 1px solid #EAE8E3;
@@ -216,9 +196,7 @@ st.markdown(textwrap.dedent("""
     padding: 2.5rem 1.75rem !important;
     background-color: #FFFFFF;
     height: calc(100vh - 64px);
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+    overflow-y: auto !important;
   }
 
   .page-indicator {
@@ -235,12 +213,14 @@ st.markdown(textwrap.dedent("""
     margin-bottom: 1.25rem;
   }
 
-  .stMarkdown p {
+  /* Standardized entry wrapper rule for complex mixed markdown states */
+  .problem-context-wrapper .stMarkdown p {
     font-family: 'EB Garamond', serif !important;
     font-size: 16px !important;
     line-height: 1.8 !important;
     color: #121212 !important;
   }
+  
   .stMarkdown p .katex, .stMarkdown p .katex * {
     font-family: KaTeX_Main, 'Times New Roman', serif !important;
   }
@@ -314,13 +294,47 @@ st.markdown(textwrap.dedent("""
     color: #90908C;
   }
 
-  /* Chat System */
-  .msg-wrapper {
-    margin-bottom: 2rem;
-    text-align: left;
+  /* Native Chat Structure Overrides */
+  div[data-testid="stChatMessage"] {
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin-bottom: 2rem !important;
+  }
+  
+  /* Hide the default chat avatars */
+  div[data-testid="stChatMessage"] div[data-testid="stChatMessageAvatar"] {
+    display: none !important;
+  }
+  
+  /* Reset standard padding on message layout boxes */
+  div[data-testid="stChatMessage"] div.stMarkdown {
+    padding: 0 !important;
   }
 
-  .msg-sender-label {
+  /* Universal typographic styles for assistant vs user blocks */
+  div[data-testid="stChatMessage"] p {
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    font-size: 13px !important;
+    line-height: 1.6 !important;
+    color: #121212 !important;
+  }
+
+  /* Specific left-accent styling for Socrates messages */
+  div[data-testid="stChatMessageContent"]:has(div.socrates-marker) p {
+    font-family: 'EB Garamond', serif !important;
+    font-size: 15px !important;
+    color: #121212 !important;
+    line-height: 1.6 !important;
+  }
+  
+  div[data-testid="stChatMessageContent"]:has(div.socrates-marker) div.stMarkdown {
+    border-left: 1.5px solid #121212;
+    padding-left: 0.75rem !important;
+  }
+
+  .custom-sender-label {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -328,36 +342,13 @@ st.markdown(textwrap.dedent("""
     margin-bottom: 0.4rem;
   }
 
-  .msg-content-text {
-    font-family: 'Plus Jakarta Sans', sans-serif !important;
-    font-size: 13px;
-    line-height: 1.6;
-    color: #121212;
-  }
-
-  .msg-wrapper.system .msg-content-text {
-    font-family: 'EB Garamond', serif !important;
-    font-size: 14px !important;
-    color: #121212 !important;
-    border-left: 1.5px solid #121212;
-    padding-left: 0.75rem;
-    line-height: 1.6;
-  }
-
-  .status-indicator {
-    font-family: 'EB Garamond', serif;
-    font-style: italic;
-    color: #5A5A57;
-    font-size: 13px;
-    margin-top: 1rem;
-  }
-
-  div[data-testid="stChatMessage"] {
+  /* Counteract Streamlit's fixed-to-viewport default chat layout styling rules */
+  div[data-testid="stChatInputContainer"] {
     background-color: transparent !important;
+    padding: 0px !important;
     border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin-bottom: 1.5rem !important;
+    position: static !important;
+    width: 100% !important;
   }
 
   [data-testid="stChatInput"] {
@@ -385,6 +376,12 @@ st.markdown(textwrap.dedent("""
   button[data-testid="stChatInputSubmit"]:hover { opacity: 0.7 !important; }
   button[data-testid="stChatInputSubmit"] svg { display: none !important; }
   button[data-testid="stChatInputSubmit"]::after { content: "SEND" !important; display: block !important; }
+  
+  /* Standardize padding properties for inner spinner frames */
+  div[data-testid="stSpinner"] {
+    padding: 0px !important;
+    margin-bottom: 1rem !important;
+  }
 </style>
 """), unsafe_allow_html=True)
 
@@ -420,7 +417,11 @@ with col_nav:
 # COLUMN 2: PROBLEM WORKSPACE SHEET
 with col_workspace:
     st.markdown(f'<div class="problem-meta">Problem Unit {st.session_state.current_question_id}</div>', unsafe_allow_html=True)
+    
+    # Enclosing dynamic markdown in explicit contextual containers to isolate theme injections
+    st.markdown(f'<div class="problem-context-wrapper">', unsafe_allow_html=True)
     st.markdown(st.session_state.question_context)
+    st.markdown('</div>', unsafe_allow_html=True)
     
     # Render Insights Notebook
     insight_count = len(st.session_state.insights)
@@ -429,7 +430,6 @@ with col_workspace:
         <div class="notebook-label">
             <span>Active Study Notebook</span>
             <span>{insight_count} Unlocked Insights</span>
-            </div>
         </div>
     """
     
@@ -463,47 +463,67 @@ with col_spacer:
 with col_chat:
     st.markdown('<div class="chat-title-area"><span class="chat-section-label">Dialogue Assistant</span></div>', unsafe_allow_html=True)
     
-    chat_container = st.container(height=450, border=False)
+    chat_container = st.container(height=520, border=False)
     
-    # Process inputs cleanly via standard lifecycle pipeline execution
+    # Display dialogue history upfront via native containers
+    with chat_container:
+        for msg in st.session_state.chat_history:
+            is_assistant = msg["role"] in ["assistant", "tutor"]
+            sender_title = "Socrates" if is_assistant else "You"
+            
+            # The CSS relies on this wrapper tag for contextual target rendering
+            marker = '<div class="socrates-marker"></div>' if is_assistant else ""
+            
+            with st.chat_message(msg["role"]):
+                st.markdown(f'<div class="custom-sender-label">{sender_title}</div>{marker}', unsafe_allow_html=True)
+                st.markdown(msg["content"])
+
     user_input = st.chat_input("Ask a question...")
     
     if user_input:
+        # 1. Immediately append and visually render user's message inside the column log
         st.session_state.chat_history.append({"role": "user", "content": user_input})
+        with chat_container:
+            with st.chat_message("user"):
+                st.markdown('<div class="custom-sender-label">You</div>', unsafe_allow_html=True)
+                st.markdown(user_input)
         
-        # Immediate state preservation fallback value calculation
-        try:
-            base_url = BACKEND_URL.rstrip("/")
-            response = requests.post(
-                f"{base_url}/chat/{st.session_state.session_id}",
-                json={"user_text": user_input},
-                timeout=15
-            )
-            if response.status_code == 200:
-                data = response.json()
-                ai_response = data.get("ai_response", "I'm having trouble analyzing this step.")
-                backend_mode = data.get("phase", "SOCRATIC")
-                st.session_state.tutoring_mode = "Active — Socratic Mode" if backend_mode == "SOCRATIC" else "Active — Direct Mode"
+        # 2. Run the loader inline where the assistant's message frame will land
+        with chat_container:
+            with st.chat_message("assistant"):
+                st.markdown('<div class="custom-sender-label">Socrates</div><div class="socrates-marker"></div>', unsafe_allow_html=True)
                 
-                nb_updates = data.get("notebook_updates", {})
-                if nb_updates and nb_updates.get("official_solution"):
-                    st.session_state.insights.append(nb_updates["official_solution"])
-            else:
-                ai_response = f"GCP Engine Error: code {response.status_code}."
-        except Exception as e:
-            ai_response = f"GCP Synchronizer Error: unable to connect to API gateway."
-            
+                with st.spinner("Socrates is analyzing..."):
+                    try:
+                        base_url = BACKEND_URL.rstrip("/")
+                        response = requests.post(
+                            f"{base_url}/chat/{st.session_state.session_id}",
+                            json={"user_text": user_input},
+                            timeout=15
+                        )
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            ai_response = data.get("ai_response", "I'm having trouble analyzing this step.")
+                            backend_mode = data.get("phase", "SOCRATIC")
+                            st.session_state.tutoring_mode = "Active — Socratic Mode" if backend_mode == "SOCRATIC" else "Active — Direct Mode"
+                            
+                            nb_updates = data.get("notebook_updates", {})
+                            if nb_updates and nb_updates.get("official_solution"):
+                                st.session_state.insights.append(nb_updates["official_solution"])
+                        
+                        elif response.status_code in [404, 500]:
+                            init_session(st.session_state.current_question_id, retain_history=True)
+                            ai_response = "Workspace sync was interrupted. Your session state has been restored—please resubmit your formula."
+                        else:
+                            ai_response = f"GCP Engine Error: code {response.status_code}."
+                            
+                    except Exception as e:
+                        ai_response = "GCP Synchronizer Error: unable to connect to API gateway."
+                
+                # Render the final text inside the open message layout box (allows native LaTeX conversion)
+                st.markdown(ai_response)
+        
+        # 3. Save assistant message to state history and execute exactly one single clean app sync
         st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
         st.rerun()
-
-    # Safely print chat history on state execution pass
-    with chat_container:
-        for msg in st.session_state.chat_history:
-            sender = "Socrates" if msg["role"] in ["assistant", "tutor"] else "You"
-            wrapper_class = "msg-wrapper system" if sender == "Socrates" else "msg-wrapper"
-            st.markdown(f"""
-            <div class="{wrapper_class}">
-                <div class="msg-sender-label">{sender}</div>
-                <div class="msg-content-text">{msg["content"]}</div>
-            </div>
-            """, unsafe_allow_html=True)
