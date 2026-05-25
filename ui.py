@@ -8,21 +8,20 @@ import textwrap
 st.set_page_config(
     layout="wide", 
     initial_sidebar_state="collapsed", 
-    page_title="Physics Tutor"
+    page_title="STUDYtable"
 )
 
-# SINGLE-CONTAINER ROUTING:
-# Streamlit connects directly to FastAPI internally on Port 8000.
+# SINGLE-CONTAINER ROUTING
 BACKEND_URL = "http://127.0.0.1:8000"
 
-# --- STATE MANAGEMENT & RECOVERY ---
+# --- 1. STATE MANAGEMENT & RECOVERY (Must happen first!) ---
 if "session_id" not in st.session_state:
     st.session_state.session_id = None
 if "current_question_id" not in st.session_state:
     st.session_state.current_question_id = "00899"
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [
-        {"role": "assistant", "content": "Welcome. I'm ready to help you work through this physics problem. Where would you like to start?"}
+        {"role": "assistant", "content": "How can I help?"}
     ]
 if "insights" not in st.session_state:
     st.session_state.insights = []
@@ -32,6 +31,7 @@ if "tutoring_mode" not in st.session_state:
     st.session_state.tutoring_mode = "Active — Socratic Mode"
 
 
+# --- 2. RECOVERY WORKSPACE FUNCTIONS ---
 def sync_session_snapshot(session_id: str):
     """Syncs session state dynamically from backend."""
     try:
@@ -87,7 +87,7 @@ def init_session(q_id: str):
             st.stop()
 
 
-# --- DYNAMIC BACKEND NAVIGATION ---
+# --- 3. DYNAMIC BACKEND NAVIGATION ---
 def navigate(direction: str):
     try:
         base_url = BACKEND_URL.rstrip("/")
@@ -103,20 +103,25 @@ def navigate(direction: str):
         st.error(f"Internal navigation failed: {e}")
 
 
-# --- INITIALIZATION RUNNER ---
+# --- 4. INTERCEPT INTERACTIVE ACTIONS ---
+if "nav_action" in st.query_params:
+    action = st.query_params["nav_action"]
+    st.query_params.clear()  
+    navigate(action)
+
+
+# --- 5. INITIALIZATION RUNNER DEPLOYMENT ---
 if st.session_state.session_id is None:
     init_session(st.session_state.current_question_id)
 else:
-    sync_session_snapshot(st.session_state.session_id)
+    sync_session_snapshot(st.session_state.session_id) 
 
 
-# --- EDITORIAL SYSTEM STYLING ---
+# --- 6. EDITORIAL SYSTEM STYLING ---
 st.markdown(textwrap.dedent("""
 <style>
-  /* Import Google Fonts directly */
   @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap');
 
-  /* Base premium minimalist setup - FORCED PURE WHITE GLOBALLY */
   html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"], .main, .block-container, [data-testid="stVerticalBlock"] {
     background-color: #FFFFFF !important;
     color: #121212 !important;
@@ -124,7 +129,6 @@ st.markdown(textwrap.dedent("""
     -webkit-font-smoothing: antialiased;
   }
   
-  /* Strip Streamlit system elements */
   header, footer, #MainMenu { display: none !important; }
   .block-container { padding: 0 !important; max-width: 100% !important; }
 
@@ -184,7 +188,7 @@ st.markdown(textwrap.dedent("""
     background-color: transparent !important;
   }
 
-  /* Target Streamlit Columns directly to manage boundaries layout without split-DOM breaks */
+  /* Structural Columns Layout Setup */
   [data-testid="column"]:nth-of-type(1) {
     border-right: 1px solid #EAE8E3;
     height: calc(100vh - 64px);
@@ -217,17 +221,6 @@ st.markdown(textwrap.dedent("""
     justify-content: space-between;
   }
 
-  .sidebar-meta {
-    font-size: 11px;
-    color: #90908C;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    writing-mode: vertical-rl;
-    transform: rotate(180deg);
-    align-self: center;
-    margin-bottom: auto;
-  }
-
   .page-indicator {
     font-size: 12px;
     color: #5A5A57;
@@ -242,16 +235,6 @@ st.markdown(textwrap.dedent("""
     margin-bottom: 1.25rem;
   }
 
-  .problem-title {
-    font-family: 'EB Garamond', serif;
-    font-size: 1.8rem;
-    font-weight: 400;
-    margin-bottom: 1.5rem;
-    color: #121212;
-    letter-spacing: -0.01em;
-  }
-
-  /* Protect KaTeX syntax from Garamond override */
   .stMarkdown p {
     font-family: 'EB Garamond', serif !important;
     font-size: 16px !important;
@@ -262,7 +245,7 @@ st.markdown(textwrap.dedent("""
     font-family: KaTeX_Main, 'Times New Roman', serif !important;
   }
 
-  /* Study Notebook Elements */
+  /* Notebook Design Layout */
   .notebook-wrapper {
     margin-top: 3rem;
     border-top: 1px solid #EAE8E3;
@@ -331,7 +314,7 @@ st.markdown(textwrap.dedent("""
     color: #90908C;
   }
 
-  /* Chat design configurations */
+  /* Chat System */
   .msg-wrapper {
     margin-bottom: 2rem;
     text-align: left;
@@ -369,7 +352,6 @@ st.markdown(textwrap.dedent("""
     margin-top: 1rem;
   }
 
-  /* Override Streamlit chat formatting elements */
   div[data-testid="stChatMessage"] {
     background-color: transparent !important;
     border: none !important;
@@ -378,7 +360,6 @@ st.markdown(textwrap.dedent("""
     margin-bottom: 1.5rem !important;
   }
 
-  /* Flat bottom line input styling */
   [data-testid="stChatInput"] {
     border: none !important;
     border-bottom: 1.5px solid #121212 !important;
@@ -387,7 +368,6 @@ st.markdown(textwrap.dedent("""
     padding: 0.2rem 0rem !important;
   }
 
-  /* Replace Streamlit default round submit icon with flat SEND label */
   button[data-testid="stChatInputSubmit"] {
     background: none !important;
     border: none !important;
@@ -402,24 +382,23 @@ st.markdown(textwrap.dedent("""
     padding: 0.5rem 0 0.5rem 1rem !important;
     transition: opacity 0.15s ease !important;
   }
-  button[data-testid="stChatInputSubmit"]:hover {
-    opacity: 0.7 !important;
-  }
-  button[data-testid="stChatInputSubmit"] svg {
-    display: none !important;
-  }
-  button[data-testid="stChatInputSubmit"]::after {
-    content: "SEND" !important;
-    display: block !important;
-  }
+  button[data-testid="stChatInputSubmit"]:hover { opacity: 0.7 !important; }
+  button[data-testid="stChatInputSubmit"] svg { display: none !important; }
+  button[data-testid="stChatInputSubmit"]::after { content: "SEND" !important; display: block !important; }
 </style>
 """), unsafe_allow_html=True)
 
 
-# --- IX. THE COMPILER HEADER ---
+# --- 7. HEADER COMPILATION ---
 st.markdown("""
 <header class="top-header">
-    <div class="brand">Socrates Workspace</div>
+    <div style="display: flex; align-items: center; gap: 40px;">
+        <div class="brand">Socrates Workspace</div>
+        <div style="display: flex; gap: 16px; align-items: center;">
+            <a href="?nav_action=prev" target="_self" style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11px; font-weight: 500; color: #5A5A57; text-decoration: none; text-transform: uppercase; letter-spacing: 0.08em;">Prev</a>
+            <a href="?nav_action=next" target="_self" style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11px; font-weight: 500; color: #5A5A57; text-decoration: none; text-transform: uppercase; letter-spacing: 0.08em;">Next</a>
+        </div>
+    </div>
     <div class="header-actions">
         <a href="#" class="action-link">Index</a>
         <a href="#" class="action-link">Uploads</a>
@@ -429,37 +408,21 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# --- X. THE 7% / 60% / 8% / 25% HORIZONTAL MATRIX GRID ---
+# --- 8. SYSTEM HORIZONTAL MATRIX GRID ---
 col_nav, col_workspace, col_spacer, col_chat = st.columns([0.09, 0.60, 0.06, 0.25])
 
-
-# ==========================================
-# COLUMN 1: NAVIGATION ASIDE (7% width)
-# ==========================================
+# COLUMN 1: NAVIGATION ASIDE
 with col_nav:
-    #st.markdown('<div class="sidebar-meta">Electromagnetic Induction</div>', unsafe_allow_html=True)
-    
-    # Flat action navigators
-    #nav_link_col1, nav_link_col2 = st.columns([1, 1])
-   # with nav_link_col1:
-   #     st.button("Prev", on_click=lambda: navigate("prev"))
-    #with nav_link_col2:
-     #   st.button("Next", on_click=lambda: navigate("next"))
-        
-    st.markdown(f'<div class="page-indicator">0{st.session_state.current_question_id[-1] if st.session_state.current_question_id[-1].isdigit() else "1"}/04</div>', unsafe_allow_html=True)
+    indicator_digit = st.session_state.current_question_id[-1]
+    page_num = indicator_digit if indicator_digit.isdigit() else "1"
+    st.markdown(f'<div class="page-indicator">0{page_num}/04</div>', unsafe_allow_html=True)
 
-
-# ==========================================
-# COLUMN 2: PROBLEM WORKSPACE SHEET (60% width)
-# ==========================================
+# COLUMN 2: PROBLEM WORKSPACE SHEET
 with col_workspace:
     st.markdown(f'<div class="problem-meta">Problem Unit {st.session_state.current_question_id}</div>', unsafe_allow_html=True)
-    #st.markdown(f'<h1 class="problem-title">Maximum Induced Electromotive Force in a Rotating Coil</h1>', unsafe_allow_html=True)
-    
-    # Problem text output
     st.markdown(st.session_state.question_context)
     
-    # Study Notebook self-contained compilation block (prevents tag parsing breaks)
+    # Render Insights Notebook
     insight_count = len(st.session_state.insights)
     notebook_html = f"""
     <div class="notebook-wrapper">
@@ -467,7 +430,6 @@ with col_workspace:
             <span>Active Study Notebook</span>
             <span>{insight_count} Unlocked Insights</span>
         </div>
-    </div>
     """
     
     if not st.session_state.insights:
@@ -492,23 +454,48 @@ with col_workspace:
     notebook_html += "</div>"
     st.markdown(notebook_html, unsafe_allow_html=True)
 
-
-# ==========================================
-# COLUMN 3: STRUCTURAL SEPARATOR GUTTER (8% width)
-# ==========================================
+# COLUMN 3: STRUCTURAL GUTTER SEPARATOR
 with col_spacer:
     pass
 
-
-# ==========================================
-# COLUMN 4: SOCRATIC SIDEBAR DIALOGUE (25% width)
-# ==========================================
+# COLUMN 4: SOCRATIC SIDEBAR DIALOGUE
 with col_chat:
     st.markdown('<div class="chat-title-area"><span class="chat-section-label">Dialogue Assistant</span></div>', unsafe_allow_html=True)
     
-    # Height-locked conversational viewport
     chat_container = st.container(height=450, border=False)
     
+    # Process inputs cleanly via standard lifecycle pipeline execution
+    user_input = st.chat_input("Ask a question...")
+    
+    if user_input:
+        st.session_state.chat_history.append({"role": "user", "content": user_input})
+        
+        # Immediate state preservation fallback value calculation
+        try:
+            base_url = BACKEND_URL.rstrip("/")
+            response = requests.post(
+                f"{base_url}/chat/{st.session_state.session_id}",
+                json={"user_text": user_input},
+                timeout=15
+            )
+            if response.status_code == 200:
+                data = response.json()
+                ai_response = data.get("ai_response", "I'm having trouble analyzing this step.")
+                backend_mode = data.get("phase", "SOCRATIC")
+                st.session_state.tutoring_mode = "Active — Socratic Mode" if backend_mode == "SOCRATIC" else "Active — Direct Mode"
+                
+                nb_updates = data.get("notebook_updates", {})
+                if nb_updates and nb_updates.get("official_solution"):
+                    st.session_state.insights.append(nb_updates["official_solution"])
+            else:
+                ai_response = f"GCP Engine Error: code {response.status_code}."
+        except Exception as e:
+            ai_response = f"GCP Synchronizer Error: unable to connect to API gateway."
+            
+        st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
+        st.rerun()
+
+    # Safely print chat history on state execution pass
     with chat_container:
         for msg in st.session_state.chat_history:
             sender = "Socrates" if msg["role"] in ["assistant", "tutor"] else "You"
@@ -519,54 +506,3 @@ with col_chat:
                 <div class="msg-content-text">{msg["content"]}</div>
             </div>
             """, unsafe_allow_html=True)
-            
-    # Minimal Chat Input pinned at the base
-    user_input = st.chat_input("Ask a question...")
-    
-    if user_input:
-        st.session_state.chat_history.append({"role": "user", "content": user_input})
-        
-        with chat_container:
-            st.markdown(f"""
-            <div class="msg-wrapper">
-                <div class="msg-sender-label">You</div>
-                <div class="msg-content-text">{user_input}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            status_placeholder = st.markdown('<div class="status-indicator">Thinking...</div>', unsafe_allow_html=True)
-            
-            try:
-                base_url = BACKEND_URL.rstrip("/")
-                response = requests.post(
-                    f"{base_url}/chat/{st.session_state.session_id}",
-                    json={"user_text": user_input},
-                    timeout=15
-                )
-                status_placeholder.empty()
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    ai_response = data.get("ai_response", "I'm having trouble analyzing this step.")
-                    
-                    backend_mode = data.get("phase", "SOCRATIC")
-                    st.session_state.tutoring_mode = "Active — Socratic Mode" if backend_mode == "SOCRATIC" else "Active — Direct Mode"
-                    
-                    nb_updates = data.get("notebook_updates", {})
-                    if nb_updates and nb_updates.get("official_solution"):
-                        st.session_state.insights.append(nb_updates["official_solution"])
-                else:
-                    ai_response = f"GCP Engine Error: code {response.status_code}."
-            except Exception as e:
-                status_placeholder.empty()
-                ai_response = f"GCP Synchronizer Error: unable to connect to API gateway."
-            
-            st.markdown(f"""
-            <div class="msg-wrapper system">
-                <div class="msg-sender-label">Socrates</div>
-                <div class="msg-content-text">{ai_response}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-        st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
-        st.rerun()
