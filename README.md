@@ -1,10 +1,6 @@
-This professional, structured README is tailored for your Devpost and GitHub pages for the Google AI Hackathon. 
 
-It highlights the technical architecture, aligns with Google AI technologies (such as the Gemini API or Vertex AI for the LLM layer), and presents your startup idea in an objective, professional, and humble tone.
 
-***
-
-# [Your Startup Name] - AI Tutor Backend
+# STUDYtable - AI Tutor Backend
 
 > **Tagline:** A modular, stateful AI tutoring engine designed to guide students through adaptive, Socratic-style learning paths.
 
