@@ -121,7 +121,6 @@ docker run -p 8000:8000 --env-file .env ai-tutor-backend
 
 ---
 
-## 🔮 Future Roadmap
 
 * **RAG Integration (Vector Databases):** Moving beyond the static `all_data.json` to plug in vector databases (e.g., pgvector, Pinecone), allowing students to upload their own textbooks or lecture notes for custom-tailored tutoring.
 * **Multimodal Tutoring:** Leveraging Gemini's native multimodal capabilities to analyze hand-written math equations, diagram photos, or spoken questions.
